@@ -66,6 +66,15 @@ const Media = (() => {
       await Store.blobPut('t:' + rec.id, t.blob);
       await Store.pendAdd({ id: 't:' + rec.id, recId: rec.id, role: 'thumb', blob: t.blob, mime: 'image/jpeg', name: `thumb-${rec.id}.jpg` });
     }
+    /* A screen-size copy (~300 KB) is what the other phone opens — the
+       original can be many MB, and the bridge hands files back slowly. */
+    if (isImage) {
+      try {
+        const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        const v = await canvasBlob(bmp, bmp.width, bmp.height, 1800, 0.82);
+        await Store.pendAdd({ id: 'v:' + rec.id, recId: rec.id, role: 'view', blob: v, mime: 'image/jpeg', name: `view-${rec.id}.jpg` });
+      } catch {}
+    }
     /* Keep portraits locally (downsized) — they drive the ghost overlay and the growth grid. */
     if (extra.portrait && !isVideo) {
       const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
@@ -83,20 +92,22 @@ const Media = (() => {
     if (urls.has(key)) return urls.get(key);
     let b = await Store.blobGet(key);
     if (!b && rec.thumbId && Drive.configured()) {
-      try { b = await Drive.download(rec.thumbId); await Store.blobPut(key, b); } catch { b = null; }
+      try { b = await Drive.download(rec.thumbId, null, 'image/jpeg'); await Store.blobPut(key, b); } catch { b = null; }
     }
     if (!b) return null;
     const u = URL.createObjectURL(b); urls.set(key, u); return u;
   }
 
   /* Big version: the portrait copy, the still-queued original, or Drive. */
-  async function fullURL(rec) {
+  async function fullURL(rec, onProgress) {
     const key = 'full:' + rec.id;
     if (urls.has(key)) return urls.get(key);
     let b = rec.portrait ? await Store.blobGet('p:' + rec.id) : null;
     if (!b) { const p = (await Store.pendAll()).find(x => x.id === 'f:' + rec.id); b = p && p.blob; }
-    if (!b && rec.driveId) {
-      b = await Drive.download(rec.driveId);
+    if (!b) b = await Store.blobGet('c:' + rec.id);           // fetched before — no second wait
+    if (!b && (rec.viewId || rec.driveId)) {
+      b = rec.viewId ? await Drive.download(rec.viewId, onProgress, 'image/jpeg') : await Drive.download(rec.driveId, onProgress, rec.mime);
+      if (b.size < 80 * 1024 * 1024) Store.blobPut('c:' + rec.id, b).catch(() => {});
       if (rec.portrait && !rec.video) await Store.blobPut('p:' + rec.id, b);
     }
     if (!b) return null;
@@ -110,10 +121,11 @@ const Media = (() => {
 
   async function remove(rec) {
     await Store.remove(rec.id);
-    for (const k of ['t:', 'p:']) await Store.blobDel(k + rec.id);
-    for (const k of ['t:', 'f:']) await Store.pendDel(k + rec.id);
+    for (const k of ['t:', 'p:', 'c:']) await Store.blobDel(k + rec.id);
+    for (const k of ['t:', 'v:', 'f:']) await Store.pendDel(k + rec.id);
     if (rec.driveId) Drive.trash(rec.driveId);
     if (rec.thumbId) Drive.trash(rec.thumbId);
+    if (rec.viewId) Drive.trash(rec.viewId);
   }
 
   /* Fill every <img data-thumb="id"> on screen. */

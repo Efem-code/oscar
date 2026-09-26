@@ -828,7 +828,9 @@ async function viewer(id) {
     </div>
     ${i > 0 ? '<button class="v-nav prev" data-v="prev">‹</button>' : ''}${i >= 0 && i < list.length - 1 ? '<button class="v-nav next" data-v="next">›</button>' : ''}`;
   const stage = el.querySelector('.v-stage');
-  Media.fullURL(rec).then(u => {
+  Media.thumbURL(rec).then(t => { if (t && stage.querySelector('.spin')) stage.style.background = `center/contain no-repeat url("${t}")`; });
+  const prog = f => { const sp = stage.querySelector('.spin'); if (sp) sp.textContent = `Loading${rec.video ? ' video' : ''}… ${Math.round(f * 100)}%`; };
+  Media.fullURL(rec, prog).then(u => {
     if (!u) {
       stage.innerHTML = `<p class="muted">Still uploading from ${esc(rec.author || rec.by || 'the other')}’s phone — it’ll appear here by itself.</p>`;
       el.dataset.waiting = rec.id;
@@ -836,6 +838,7 @@ async function viewer(id) {
       return;
     }
     delete el.dataset.waiting;
+    stage.style.background = '';
     stage.innerHTML = rec.video ? `<video src="${u}" controls playsinline autoplay></video>` : `<img src="${u}" alt="">`;
   }).catch(e => { stage.innerHTML = `<p class="muted">${esc(e.message)}</p>`; });
   const saveCap = async () => { const c = $('#v-cap').value.trim(); if (c !== (rec.caption || '')) await Store.put({ id: rec.id, caption: c }); };

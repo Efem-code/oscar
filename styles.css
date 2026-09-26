@@ -233,7 +233,7 @@ details summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 .v-nav { position: absolute; top: 45%; font-size: 40px; color: #fff; width: 48px; height: 64px; background: rgba(0,0,0,.25); border-radius: 12px; }
 .v-nav.prev { left: 6px; }
 .v-nav.next { right: 6px; }
-.spin { color: #aaa; }
+.spin { color: #fff; background: rgba(0,0,0,.6); padding: 8px 14px; border-radius: 99px; font-size: 14px; }
 
 /* portrait camera */
 .cam { position: fixed; inset: 0; background: #000; z-index: 50; }

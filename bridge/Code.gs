@@ -61,7 +61,7 @@ const ACTIONS = {
       const f = it.next(), name = f.getName();
       if (name.indexOf('log-') !== 0) continue;
       const v = version_(f), row = { id: f.getId(), name: name, version: v };
-      if (seen[row.id] !== v && name.indexOf(skip) !== 0) row.text = f.getBlob().getDataAsString('UTF-8');
+      if (seen[row.id] !== v && !(skip && name.indexOf(skip) === 0)) row.text = f.getBlob().getDataAsString('UTF-8');
       files.push(row);
     }
     return { files: files };
@@ -106,6 +106,21 @@ const ACTIONS = {
     if (c === 200 || c === 201) return { done: true, id: JSON.parse(r.getContentText()).id };
     if (c === 308) return { done: false };
     throw new Error('Upload chunk failed (' + c + '): ' + r.getContentText().slice(0, 200));
+  },
+
+  /* Big files come back in pieces, read straight from Drive with a byte range. */
+  dlPart: q => {
+    const len = Math.min(q.len || 3145728, 4194304);
+    const r = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(q.id) + '?alt=media&supportsAllDrives=true', {
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), Range: 'bytes=' + q.offset + '-' + (q.offset + len - 1) },
+      muteHttpExceptions: true,
+    });
+    const c = r.getResponseCode();
+    if (c === 416) return { b64: '', size: q.offset };
+    if (c !== 206 && c !== 200) throw new Error('Drive download failed (' + c + ')');
+    const h = r.getAllHeaders(), cr = h['Content-Range'] || h['content-range'] || '';
+    const bytes = r.getContent();
+    return { b64: Utilities.base64Encode(bytes), size: cr ? Number(cr.split('/')[1]) : q.offset + bytes.length };
   },
 
   download: q => {

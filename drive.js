@@ -83,7 +83,7 @@ const Drive = (() => {
   const CHUNK = 4 * 1024 * 1024;          // a multiple of 256 KB, as Drive requires
 
   async function upload(p, onProgress) {
-    const meta = { name: p.name, mime: p.mime || 'application/octet-stream', role: p.role, doc: !!p.doc, ym: p.ym };
+    const meta = { name: p.name, mime: p.mime || 'application/octet-stream', role: p.role === 'view' ? 'thumb' : p.role, doc: !!p.doc, ym: p.ym };
     if (p.blob.size <= SMALL) {
       const r = await call('put', { ...meta, b64: await b64(p.blob) });
       onProgress(1);
@@ -98,9 +98,32 @@ const Drive = (() => {
     throw new Error('Upload ended early');
   }
 
-  async function download(id) {
-    const r = await call('download', { id });
-    return (await fetch(`data:${r.mime};base64,${r.b64}`)).blob();
+  const bytesOf = b => { const bin = atob(b); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; };
+  const PART = 512 * 1024;       // Apps Script replies get unreliable past ~700 KB
+
+  /* Fetched in 3 MB pieces: Apps Script can't hand back a whole video in one
+     reply fast enough. Built from bytes, not a data: URL, which iOS chokes on. */
+  async function download(id, onProgress, mime = '') {
+    const parts = [];
+    let off = 0, size = Infinity;
+    try {
+      while (off < size) {
+        let r;
+        for (let tries = 0; ; tries++) {
+          try { r = await call('dlPart', { id, offset: off, len: PART }); break; }
+          catch (e) { if (tries >= 3 || /Unknown action|Wrong key/.test(e.message)) throw e; await new Promise(res => setTimeout(res, 1500 * (tries + 1))); }
+        }
+        const bytes = bytesOf(r.b64 || '');
+        if (!bytes.length) break;
+        parts.push(bytes); off += bytes.length; size = r.size;
+        onProgress && onProgress(Math.min(1, off / size));
+      }
+    } catch (e) {
+      if (!/Unknown action/.test(e.message)) throw e;
+      const r = await call('download', { id });         // bridge not updated yet
+      return new Blob([bytesOf(r.b64)], { type: mime || r.mime });
+    }
+    return new Blob(parts, { type: mime || 'application/octet-stream' });
   }
 
   async function trash(id) {
@@ -132,8 +155,9 @@ const Drive = (() => {
   }
 
   async function flushUploads() {
-    // Thumbnails first: the other phone sees a new photo long before a big video finishes.
-    const queue = (await Store.pendAll()).sort((a, b) => (a.role === 'thumb' ? 0 : 1) - (b.role === 'thumb' ? 0 : 1));
+    // Thumbnails, then screen-size copies, then originals: the other phone sees a new photo long before a big video finishes.
+    const order = { thumb: 0, view: 1 };
+    const queue = (await Store.pendAll()).sort((a, b) => (order[a.role] ?? 2) - (order[b.role] ?? 2));
     for (let i = 0; i < queue.length; i++) {
       const p = queue[i];
       const rec = Store.get(p.recId);
@@ -145,7 +169,7 @@ const Drive = (() => {
       }
       state.upload = { name: p.name, n: i + 1, of: queue.length, frac: 0 }; emit();
       const id = await upload(p, frac => { state.upload.frac = frac; emit(); });
-      await Store.put({ id: rec.id, [p.role === 'thumb' ? 'thumbId' : 'driveId']: id });
+      await Store.put({ id: rec.id, [{ thumb: 'thumbId', view: 'viewId' }[p.role] || 'driveId']: id });
       await Store.pendDel(p.id);
     }
     state.upload = null;
