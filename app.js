@@ -378,7 +378,7 @@ VIEWS.today = () => {
       </div>
       <div class="timeline">${sum.logs.length ? sum.logs.map(timelineRow).join('') : '<p class="muted pad">Nothing logged yet.</p>'}</div>
     </section>
-    ${due.length || nextLessons(7).length ? `<section class="card"><h3>Coming up</h3>${nextLessons(7).map(lessonRow).join('')}${due.map(healthRow).join('')}</section>` : ''}
+    ${due.length || nextLessons(7).length || upcomingAppts(7).length ? `<section class="card"><h3>Coming up</h3>${upcomingAppts(7).map(apptRow).join('')}${nextLessons(7).map(lessonRow).join('')}${due.map(healthRow).join('')}</section>` : ''}
     ${shopItems().some(x => !x.done) ? `<button class="card chipcard" data-act="shop">🛒 <b>${shopItems().filter(x => !x.done).length} on the shopping list</b> <span class="muted">${esc(shopItems().filter(x => !x.done).slice(0, 3).map(x => x.text).join(', '))}</span></button>` : ''}
     </div></div>`;
 };
@@ -402,6 +402,9 @@ VIEWS.health = () => {
     <section class="card"><div class="h-row"><h3>Weight</h3><button class="pill" data-act="addWeight">+ Weight</button></div>
       ${weightChart(unit)}</section>
     </div><div>
+    <section class="card"><div class="h-row"><h3>📅 Appointments</h3><button class="pill" data-act="appt">+ Book</button></div>
+      ${Store.list('appt', a => !a.visitId && !a.cancelled).sort((a, b) => (a.day + (a.time || '')) < (b.day + (b.time || '')) ? -1 : 1).map(apptRow).join('') || '<p class="muted">Booked a vet visit (or grooming)? Add it here — it shows on Today and in the morning reminder.</p>'}
+    </section>
     <section class="card"><div class="h-row"><h3>Vet visits</h3><button class="pill" data-act="addVet">+ Visit</button></div>
       ${vets.length ? vets.map(v => `<button class="item-main block" data-act="showVet" data-id="${v.id}">
         <span class="ico">🩺</span><span><b>${esc(v.reason || 'Visit')}</b><small>${fmtDate(localDay(v.at))}${v.clinic ? ' · ' + esc(v.clinic) : ''}${v.cost ? ' · ' + money(v.cost) : ''}</small>
@@ -693,8 +696,8 @@ function saveVet(id) {
     const { day, ...rest } = v;
     const at = new Date(parseDay(day).getTime() + 12 * 36e5).toISOString();
     const r = await Store.put({ ...(id ? { id } : { kind: 'vet' }), ...rest, at });
-    if (v.followUp && !Store.list('health', h => h.vetId === r.id).length) {
-      await Store.put({ kind: 'health', cat: 'checkup', name: `Follow-up: ${v.reason}`, due: v.followUp, vetId: r.id });
+    if (v.followUp && !Store.list('appt', a => a.fromVet === r.id).length) {
+      await Store.put({ kind: 'appt', type: 'Vet', day: v.followUp, clinic: v.clinic, vet: v.vet, reason: `Follow-up: ${v.reason}`, fromVet: r.id });
     }
     if (!id) setTimeout(() => ACT.showVet({ id: r.id }), 50);
   };
@@ -960,6 +963,68 @@ ACT.syncSettings = () => {
     $('#disc', r) && ($('#disc', r).onclick = () => { if (confirm('Stop syncing on this phone? Nothing is deleted.')) { Drive.disconnect(); ACT.syncSettings(); } });
     $('#snow', r) && ($('#snow', r).onclick = () => { Drive.sync(); closeSheet(); });
   });
+};
+
+/* ---------- appointments ---------- */
+/* Booked ahead (vet, groomer…). Once it has happened, "Log the visit" turns a
+   vet appointment into a vet-visit record with the details already filled in. */
+const APPT_TYPES = ['Vet', 'Emergency vet', 'Groomer', 'Spay / neuter', 'Dental', 'Other'];
+const upcomingAppts = days => Store.list('appt', a => !a.visitId && !a.cancelled && a.day && daysUntil(a.day) <= days && daysUntil(a.day) >= -3)
+  .sort((a, b) => (a.day + (a.time || '')) < (b.day + (b.time || '')) ? -1 : 1);
+
+function apptRow(a) {
+  const n = daysUntil(a.day);
+  const when = n < 0 ? 'How did it go?' : n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : fmtDay(a.day);
+  return `<div class="item ${n <= 1 ? 'soon' : ''}"><button class="item-main" data-act="showAppt" data-id="${a.id}">
+    <span class="ico">${a.type === 'Groomer' ? '✂️' : '📅'}</span><span><b>${esc(a.reason || a.type || 'Appointment')}</b>
+    <small>${when}${a.time ? ' · ' + fmtClock(a.time) : ''}${a.clinic ? ' · ' + esc(a.clinic) : ''}${a.vet ? ' · ' + esc(a.vet) : ''}</small></span></button>
+    ${n < 0 && a.type !== 'Groomer' ? `<button class="pill" data-act="apptToVisit" data-id="${a.id}">Log visit</button>` : ''}</div>`;
+}
+
+const apptFields = [
+  { k: 'type', label: 'Type', type: 'chips', options: APPT_TYPES, def: 'Vet' },
+  { k: 'reason', label: 'What for', type: 'suggest', options: ['Checkup', 'Vaccines', 'Follow-up', 'Spay / neuter', 'Nail trim', 'Bath & groom'], required: true },
+  { type: 'row', fields: [{ k: 'day', label: 'Date', type: 'date', required: true }, { k: 'time', label: 'Time', type: 'time' }] },
+  { type: 'row', fields: [{ k: 'clinic', label: 'Clinic / place' }, { k: 'vet', label: 'Vet / groomer' }] },
+  { k: 'phone', label: 'Phone', type: 'tel' },
+  { k: 'bring', label: 'Bring / ask about', type: 'textarea', rows: 3, ph: 'vaccine records, stool sample, ask about spay timing…' },
+];
+
+ACT.appt = d => {
+  const r = d.id ? Store.get(d.id) : null;
+  const clinic = Store.list('contact', c => c.role === 'Vet clinic')[0];
+  form({ title: '📅 Appointment', fields: apptFields, value: r || { type: 'Vet', clinic: clinic?.name || '', phone: clinic?.phone || '' },
+    onSave: async v => { const a = await Store.put(r ? { id: r.id, ...v } : { kind: 'appt', ...v }); if (!r) toast(`Booked for ${fmtDay(a.day)}${a.time ? ' at ' + fmtClock(a.time) : ''}`); },
+    onDelete: r ? () => Store.remove(r.id) : null });
+};
+
+ACT.showAppt = d => {
+  const a = Store.get(d.id); if (!a) return;
+  const c = Store.list('contact', x => x.name && x.name === a.clinic)[0];
+  const phone = a.phone || c?.phone, addr = c?.address;
+  const n = daysUntil(a.day);
+  sheet(`<h2>📅 ${esc(a.reason || a.type)}</h2>
+    <p class="muted">${fmtDay(a.day)}${a.time ? ' at ' + fmtClock(a.time) : ''} · ${n > 1 ? `in ${n} days` : n === 1 ? 'tomorrow' : n === 0 ? 'today' : `${-n} day${n === -1 ? '' : 's'} ago`}</p>
+    <dl class="kv">${kv('Type', a.type)}${kv('Where', a.clinic)}${kv('With', a.vet)}${phone ? `<dt>Phone</dt><dd><a href="tel:${esc(phone)}">${esc(phone)}</a></dd>` : ''}
+      ${addr ? `<dt>Directions</dt><dd><a href="https://maps.google.com/?q=${encodeURIComponent(addr)}" target="_blank" rel="noopener">${esc(addr)}</a></dd>` : ''}${kv('Bring / ask', a.bring)}</dl>
+    <div class="btns"><button class="danger" id="ap-cancel">Cancelled</button><span class="grow"></span>
+      <button class="ghost" data-act="appt" data-id="${a.id}">Edit</button>
+      ${a.type !== 'Groomer' ? `<button class="primary" data-act="apptToVisit" data-id="${a.id}">Log the visit</button>` : `<button class="primary" id="ap-done">Done</button>`}</div>`, r => {
+    $('#ap-cancel', r).onclick = async () => { if (confirm('Mark this appointment as cancelled?')) { await Store.put({ id: a.id, cancelled: true }); closeSheet(); } };
+    $('#ap-done', r) && ($('#ap-done', r).onclick = async () => { await Store.put({ id: a.id, visitId: 'done' }); closeSheet(); });
+  });
+};
+
+/* The appointment becomes a vet visit — same date, clinic, vet and reason. */
+ACT.apptToVisit = d => {
+  const a = Store.get(d.id);
+  form({ title: '🩺 Vet visit', fields: vetFields,
+    value: { day: a.day, clinic: a.clinic, vet: a.vet, reason: a.reason, unit: P().unit || 'kg' },
+    onSave: async v => {
+      await saveVet()(v);
+      const visit = Store.list('vet').find(x => x.reason === v.reason && localDay(x.at) === v.day);
+      await Store.put({ id: a.id, visitId: visit?.id || 'done' });
+    } });
 };
 
 /* ---------- training classes ---------- */

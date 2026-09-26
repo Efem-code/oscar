@@ -76,6 +76,14 @@ async function healthReminder() {
     const today = key(new Date()), tomorrow = key(new Date(Date.now() + 864e5));
     const due = recs.filter(r => r.kind === 'health' && !r.deleted && !r.done && r.due && r.due <= tomorrow).sort((a, b) => a.due < b.due ? -1 : 1);
     const pet = (recs.find(r => r.id === 'profile' && !r.deleted) || {}).name || 'Your puppy';
+    const appts = recs.filter(r => r.kind === 'appt' && !r.deleted && !r.visitId && !r.cancelled && (r.day === today || r.day === tomorrow))
+      .sort((a, b) => (a.day + (a.time || '')) < (b.day + (b.time || '')) ? -1 : 1);
+    if (appts.length) {
+      const a = appts[0], clock = a.time ? new Date(`2000-01-01T${a.time}`).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+      const more = due.length ? `\nAlso: ${due.length} health item${due.length > 1 ? 's' : ''} due` : '';
+      return { title: `📅 ${pet}: ${a.reason || a.type || 'Appointment'} ${a.day === today ? 'today' : 'tomorrow'}${clock ? ' at ' + clock : ''}`,
+        body: [a.clinic, a.vet && 'with ' + a.vet, a.bring && 'Bring/ask: ' + a.bring].filter(Boolean).join(' · ') + more, tag: 'appt', url: './#health' };
+    }
     const lessons = recs.filter(r => r.kind === 'lesson' && !r.deleted && !r.done && (r.due === today || r.due === tomorrow));
     if (lessons.length) {
       const l = lessons.sort((a, b) => a.due < b.due ? -1 : 1)[0], c = recs.find(r => r.id === l.classId) || {};
