@@ -5,7 +5,7 @@
 const BUILD = '20260925-192019';
 const CACHE = 'oscar-' + BUILD;
 const SHELL = [
-  './', './index.html', './styles.css', './data.js', './store.js', './drive.js', './media.js', './app.js',
+  './', './index.html', './styles.css', './data.js', './store.js', './drive.js', './media.js', './push.js', './app.js',
   './manifest.webmanifest', './icon-192.png', './icon-512.png'
 ];
 
@@ -47,4 +47,24 @@ self.addEventListener('fetch', e => {
       return hit || fresh;
     })
   );
+});
+
+/* A phone posted photos: show it even when the app is closed. */
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Puppy Log', {
+    body: d.body || 'Something new was added', tag: d.tag || 'oscar', renotify: true,
+    icon: 'icon-192.png', badge: 'icon-192.png', data: { url: d.url || './' },
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = new URL(e.notification.data?.url || './', self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    const open = list.find(c => c.url.startsWith(self.registration.scope));
+    if (open) { open.postMessage({ goto: new URL(url).hash.slice(1) }); return open.focus(); }
+    return self.clients.openWindow(url);
+  }));
 });

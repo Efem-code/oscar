@@ -126,6 +126,8 @@ const Drive = (() => {
     return new Blob(parts, { type: mime || 'application/octet-stream' });
   }
 
+  const relay = (endpoint, headers, b64body) => call('push', { endpoint, headers, b64: b64body });
+
   async function trash(id) {
     try { await call('trash', { id }); } catch { /* offline or already gone — the record is deleted either way */ }
   }
@@ -204,6 +206,7 @@ const Drive = (() => {
     await push(files);          // logs before media, so a slow video never holds up a pee log
     await flushUploads();
     await push(files);          // the new Drive ids from the uploads
+    try { await Push.check(); await Push.announce(); await push(files); } catch {}
   }
 
   /* Self-repair: a photo this phone took that never reached Drive and has
@@ -235,7 +238,7 @@ const Drive = (() => {
 
   return {
     state, onChange: f => listeners.add(f), configured, connect, disconnect, fromHash,
-    sync, soon, download, trash,
+    sync, soon, download, trash, relay,
     folderName: () => Store.pref('oscar.folderName') || '',
     webLink: id => `https://drive.google.com/file/d/${id}/view`,
     folderLink: () => Store.pref('oscar.folder') ? `https://drive.google.com/drive/folders/${Store.pref('oscar.folder')}` : '',

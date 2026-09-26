@@ -557,14 +557,22 @@ VIEWS.more = () => {
         <span><b>${esc(c.name)}</b><small>${esc(c.role)}${c.notes ? ' · ' + esc(c.notes) : ''}</small></span></button>${c.phone ? `<a class="pill" href="tel:${esc(c.phone)}">Call</a>` : ''}</div>`).join('')}
       ${!contacts.some(c => c.role === 'Poison helpline') ? '<button class="link" data-act="poison">+ Add pet poison helplines</button>' : ''}
     </section>
+    <section class="card"><div class="h-row"><h3>💡 Ideas & requests</h3><button class="pill" data-act="wish">+ Add</button></div>
+      <p class="small muted">Features you’d like, things that bug you, notes for later. Shared between both phones.</p>
+      ${wishes().map(w => `<div class="item wish ${w.done ? 'done' : ''}"><button class="tick" data-act="wishDone" data-id="${w.id}" aria-label="Mark done">${w.done ? '✅' : '⬜'}</button>
+        <button class="item-main" data-act="wish" data-id="${w.id}"><span><b>${esc(w.text)}</b><small>${esc(w.by || '')} · ${fmtDay(localDay(w.at))}${w.done ? ' · done' : ''}</small></span></button></div>`).join('') || '<p class="muted">Nothing yet.</p>'}
+      ${wishes().length ? '<button class="link" data-act="wishCopy">Copy list</button>' : ''}
+    </section>
     <section class="card"><h3>Share & export</h3>
       <button class="item-main block" data-act="careSheet"><span class="ico">📋</span><span><b>Care sheet</b><small>One page for a sitter, groomer or new vet — print or share</small></span></button>
       <button class="item-main block" data-act="syncSettings"><span class="ico">☁️</span><span><b>Sync & sharing</b><small>${esc(syncLine())}</small></span></button>
       <button class="item-main block" data-act="backup"><span class="ico">💾</span><span><b>Backup</b><small>Save or restore everything as a file</small></span></button>
+      <button class="item-main block" data-act="notify"><span class="ico">🔔</span><span><b>Notifications</b><small>${Push.enabled() ? 'On — you’ll hear when new photos arrive' : 'Off — tap to get told about new photos'}</small></span></button>
       <button class="item-main block" data-act="me"><span class="ico">🙋</span><span><b>You: ${esc(Store.who())}</b><small>Name shown on what you log · alerts</small></span></button>
     </section>
     </div></div>`;
 };
+const wishes = () => Store.list('wish').sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.at < b.at ? 1 : -1));
 const kv = (k, v) => v ? `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>` : '';
 function syncLine() {
   const s = Drive.state;
@@ -907,6 +915,41 @@ ACT.syncSettings = () => {
   });
 };
 
+/* ---------- ideas & requests ---------- */
+ACT.wish = d => {
+  const r = d.id ? Store.get(d.id) : null;
+  form({ title: '💡 Idea or request', value: r || {}, fields: [
+    { k: 'text', label: 'What would help?', type: 'textarea', rows: 4, required: true, ph: 'e.g. remind us when flea meds are due, a place for grooming notes…' }],
+    onSave: v => Store.put(r ? { id: r.id, ...v } : { kind: 'wish', ...v }), onDelete: r ? () => Store.remove(r.id) : null });
+};
+ACT.wishDone = d => { const r = Store.get(d.id); return Store.put({ id: r.id, done: !r.done }); };
+ACT.wishCopy = async () => {
+  const text = wishes().filter(w => !w.done).map(w => `- ${w.text} (${w.by || ''})`).join('\n');
+  try { await navigator.clipboard.writeText(`Puppy Log ideas:\n${text}`); toast('Copied — paste it anywhere'); } catch { toast('Copy failed'); }
+};
+
+/* ---------- notifications ---------- */
+ACT.notify = () => {
+  const on = Push.enabled();
+  const others = Store.list('pushsub', x => x.id !== 'sub-' + Store.dev).map(x => x.name).filter(Boolean);
+  sheet(`<h2>🔔 Notifications</h2>
+    <p class="muted">Get a notification when the other phone adds photos, videos or a milestone — even when the app is closed.</p>
+    ${/iPhone|iPad/.test(navigator.userAgent) ? '<p class="small muted">iPhone: this works only in the app opened from the Home Screen icon (iOS 16.4+).</p>' : ''}
+    <div class="step ${on ? 'ok' : ''}"><b>This phone: ${on ? 'on' : 'off'}</b>
+      <p>${on ? '<button class="ghost" id="n-test">Send a test to all phones</button> <button class="link" id="n-off">Turn off</button>' : '<button class="primary" id="n-on">Turn on notifications</button>'}</p></div>
+    <p class="small muted">${others.length ? 'Also on: ' + others.map(esc).join(', ') : 'No other phone has turned them on yet.'}</p>`, r => {
+    $('#n-on', r) && ($('#n-on', r).onclick = async () => {
+      try { await Push.enable(); toast('Notifications on'); await Drive.sync(); ACT.notify(); } catch (e) { toast(esc(e.message)); }
+    });
+    $('#n-off', r) && ($('#n-off', r).onclick = async () => { await Push.disable(); ACT.notify(); });
+    $('#n-test', r) && ($('#n-test', r).onclick = async () => {
+      await Drive.sync();
+      const n = await Push.send(`🐶 Test from ${Store.who()}`, `Notifications for ${App.pet()} are working`, { includeSelf: true, tag: 'test' });
+      toast(n ? `Sent to ${n} phone${n > 1 ? 's' : ''}` : 'Nothing sent — is sync connected?');
+    });
+  });
+};
+
 /* ---------- backup ---------- */
 ACT.backup = () => sheet(`<h2>💾 Backup</h2>
   <p class="muted">Saves every log, record and caption as one file (photos stay in Drive). Restoring merges — nothing newer is overwritten.</p>
@@ -990,6 +1033,10 @@ window.addEventListener('popstate', () => { if (!$('#sheet').hidden) closeSheet(
 
 (async () => {
   await Store.open();
+  if (!Store.pref('oscar.pushSince')) Store.setPref('oscar.pushSince', new Date().toISOString());
+  const goto = h => { if (VIEWS[h]) { ui.tab = h; render(); } };
+  goto(location.hash.slice(1));
+  navigator.serviceWorker?.addEventListener('message', e => e.data?.goto && goto(e.data.goto));
   Store.blobClear('c:').catch(() => {});   // full-size copies an earlier version kept on the phone
   Store.onChange(() => {
     renderSoon(); Drive.soon();

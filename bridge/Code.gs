@@ -130,6 +130,17 @@ const ACTIONS = {
     return { b64: Utilities.base64Encode(b.getBytes()), mime: b.getContentType() };
   },
 
+  /* Relay a Web Push message (encrypted and signed on the phone). Push
+     services refuse requests straight from a web page, so they go via here. */
+  push: q => {
+    const host = String(q.endpoint).match(/^https:\/\/([^/]+)\//);
+    if (!host || !/(^|\.)(fcm\.googleapis\.com|push\.apple\.com|push\.services\.mozilla\.com|notify\.windows\.com)$/.test(host[1])) throw new Error('Not a push service');
+    const headers = Object.assign({}, q.headers), type = headers['Content-Type'];
+    delete headers['Content-Type'];
+    const r = UrlFetchApp.fetch(q.endpoint, { method: 'post', contentType: type, headers: headers, payload: Utilities.base64Decode(q.b64), muteHttpExceptions: true });
+    return { status: r.getResponseCode(), text: r.getContentText().slice(0, 200) };
+  },
+
   trash: q => { DriveApp.getFileById(q.id).setTrashed(true); return {}; },
 };
 
