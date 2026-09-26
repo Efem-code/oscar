@@ -883,7 +883,10 @@ ACT.syncSettings = async () => {
       ${root ? `<p>Connected. <a href="${Drive.folderLink(root)}" target="_blank" rel="noopener">Open in Drive</a> · <button class="link" id="fchange">Change</button></p>
         <div class="inline"><input id="semail" type="email" placeholder="partner@gmail.com"><button class="pill" id="sshare">Share</button></div>
         <p class="small muted">Gives them edit access. They then pick “Join” on their phone.</p>`
-      : signed ? `<p><button class="primary" id="fnew">Create ${esc(App.pet())}’s folder</button> <button class="ghost" id="ffind">Join a shared one</button></p><div id="flist"></div>`
+      : signed ? `<p class="small muted">Paste the link to a Drive folder you made (Share → Copy link). You both need Editor access.</p>
+        <div class="inline"><input id="flink" placeholder="https://drive.google.com/drive/folders/…"><button class="pill" id="fuse">Use</button></div>
+        <p class="small muted">Or let the app make one:</p>
+        <p><button class="ghost" id="fnew">Create ${esc(App.pet())}’s folder</button> <button class="ghost" id="ffind">Find a shared one</button></p><div id="flist"></div>`
       : '<p class="muted small">Sign in first.</p>'}</div>
     ${root && signed ? `<p><button class="primary" id="snow">Sync now</button> <span class="muted small">${esc(syncLine())}</span></p>` : ''}`, r => {
     const again = () => ACT.syncSettings();
@@ -892,7 +895,8 @@ ACT.syncSettings = async () => {
     $('#sin', r) && ($('#sin', r).onclick = run(async () => { await Drive.signIn(); Drive.sync(); }, 'Signed in'));
     $('#sout', r) && ($('#sout', r).onclick = run(async () => Drive.signOut()));
     $('#fnew', r) && ($('#fnew', r).onclick = run(async () => { await Drive.createFolder(App.pet()); await Drive.sync(); }, 'Folder created'));
-    $('#ffind', r) && ($('#ffind', r).onclick = async () => {
+    $('#fuse', r) && ($('#fuse', r).onclick = run(async () => { const name = await Drive.joinLink($('#flink', r).value); await Drive.sync(); toast(`Connected to “${esc(name)}” — syncing`); }));
+    $('#ffind', r) &&($('#ffind', r).onclick = async () => {
       $('#flist', r).innerHTML = '<p class="muted">Looking…</p>';
       try {
         const fs = await Drive.findFolders();

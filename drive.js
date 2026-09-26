@@ -157,6 +157,23 @@ const Drive = (() => {
     await Store.markAllDirty();
   }
 
+  /* Use a folder you made yourself in Drive: paste its share link (or ID). */
+  async function joinLink(link) {
+    const m = String(link).match(/folders\/([\w-]{10,})/) || String(link).match(/[?&]id=([\w-]{10,})/) || String(link).trim().match(/^([\w-]{10,})$/);
+    if (!m) throw new Error('That doesn’t look like a Drive folder link');
+    let f;
+    try {
+      f = await (await api(`/files/${m[1]}?fields=id,name,mimeType,capabilities(canAddChildren)&supportsAllDrives=true`)).json();
+    } catch (e) {
+      if (e instanceof AuthNeeded) throw e;
+      throw new Error('Can’t open that folder with this Google account — share it with this account as an Editor first');
+    }
+    if (f.mimeType !== FOLDER) throw new Error('That link is a file, not a folder');
+    if (!f.capabilities?.canAddChildren) throw new Error(`You can view “${f.name}” but not add to it — it needs Editor access`);
+    await joinFolder(f.id);
+    return f.name;
+  }
+
   async function share(email) {
     const root = await folderId();
     await api(`/files/${root}/permissions?sendNotificationEmail=true&supportsAllDrives=true`, {
@@ -294,7 +311,7 @@ const Drive = (() => {
 
   return {
     state, onChange: f => listeners.add(f), signIn, signOut, hasToken, clientId,
-    createFolder, findFolders, joinFolder, share, folderId,
+    createFolder, findFolders, joinFolder, joinLink, share, folderId,
     sync, soon, download, trash, AuthNeeded,
     webLink: id => `https://drive.google.com/file/d/${id}/view`,
     folderLink: id => `https://drive.google.com/drive/folders/${id}`,

@@ -23,16 +23,22 @@ setup (about 10 minutes, once).
 When you sign in, Google shows **"Google hasn't verified this app"**. That's
 expected for a private Testing-mode app. Tap **Continue**.
 
-## 2. First phone
+## 2. Make the folder in Drive
+
+1. In Google Drive, make a folder, e.g. **Oscar**. It can go anywhere.
+2. **Share** it with your partner's Gmail as an **Editor**. Leave "General access"
+   on **Restricted**, not "Anyone with the link": the folder will hold his microchip
+   number, insurance details and vet records.
+3. **Share → Copy link.**
+
+## 3. Both phones
 
 1. Open the app → **More → Sync & sharing**.
 2. Paste the Client ID → **Save** → **Sign in with Google**.
-3. **Create Oscar's folder**, then type your partner's Gmail → **Share**.
+3. Paste the folder link → **Use**.
 
-## 3. Second phone
-
-1. Install the app, paste the same Client ID, sign in.
-2. **Join a shared one** → pick *Oscar — Puppy Log* → **Join**.
+(Or skip step 2: tap **Create Oscar's folder** on one phone and **Share** from
+there, then **Find a shared one** on the other.)
 
 That's it. Each phone syncs when it opens, every couple of minutes while open,
 and a few seconds after anything is logged. Offline logging queues up and
@@ -41,7 +47,7 @@ syncs later.
 ## What ends up in Drive
 
 ```
-Oscar — Puppy Log/
+Oscar/   (your folder)
   Photos & Videos/2026-10/2026-10-03 1432 Oscar.jpg …
   Vet & Documents/…            invoice and record photos from vet visits
   _app data (don't edit)/      the log files and thumbnails
