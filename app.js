@@ -1137,9 +1137,12 @@ ACT.notify = () => {
     ${/iPhone|iPad/.test(navigator.userAgent) ? '<p class="small muted">iPhone: this works only in the app opened from the Home Screen icon (iOS 16.4+).</p>' : ''}
     <div class="step ${on ? 'ok' : ''}"><b>This phone: ${on ? 'on' : 'off'}</b>
       <p>${on ? '<button class="ghost" id="n-test">Send a test to all phones</button> <button class="link" id="n-off">Turn off</button>' : '<button class="primary" id="n-on">Turn on notifications</button>'}</p></div>
-    <p class="small muted">${others.length ? 'Also on: ' + others.map(esc).join(', ') : 'No other phone has turned them on yet.'}</p>`, r => {
+    <p class="small muted">${others.length ? 'Also on: ' + others.map(esc).join(', ') : 'No other phone has turned them on yet.'}</p>
+    <div id="n-err" class="banner" hidden></div>
+    <p class="small muted">Check: ${esc(Push.diag())}</p>`, r => {
     $('#n-on', r) && ($('#n-on', r).onclick = async () => {
-      try { await Push.enable(); toast('Notifications on'); await Drive.sync(); ACT.notify(); } catch (e) { toast(esc(e.message)); }
+      try { await Push.enable(); toast('Notifications on'); await Drive.sync(); ACT.notify(); }
+      catch (e) { const b = $('#n-err', r); b.hidden = false; b.textContent = e.message; }
     });
     $('#n-off', r) && ($('#n-off', r).onclick = async () => { await Push.disable(); ACT.notify(); });
     $('#n-test', r) && ($('#n-test', r).onclick = async () => {
