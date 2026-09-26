@@ -829,7 +829,13 @@ async function viewer(id) {
     ${i > 0 ? '<button class="v-nav prev" data-v="prev">‹</button>' : ''}${i >= 0 && i < list.length - 1 ? '<button class="v-nav next" data-v="next">›</button>' : ''}`;
   const stage = el.querySelector('.v-stage');
   Media.fullURL(rec).then(u => {
-    if (!u) { stage.innerHTML = '<p class="muted">Sign in to sync to load this one.</p>'; return; }
+    if (!u) {
+      stage.innerHTML = `<p class="muted">Still uploading from ${esc(rec.author || rec.by || 'the other')}’s phone — it’ll appear here by itself.</p>`;
+      el.dataset.waiting = rec.id;
+      Drive.soon(500);
+      return;
+    }
+    delete el.dataset.waiting;
     stage.innerHTML = rec.video ? `<video src="${u}" controls playsinline autoplay></video>` : `<img src="${u}" alt="">`;
   }).catch(e => { stage.innerHTML = `<p class="muted">${esc(e.message)}</p>`; });
   const saveCap = async () => { const c = $('#v-cap').value.trim(); if (c !== (rec.caption || '')) await Store.put({ id: rec.id, caption: c }); };
@@ -972,7 +978,12 @@ window.addEventListener('popstate', () => { if (!$('#sheet').hidden) closeSheet(
 
 (async () => {
   await Store.open();
-  Store.onChange(() => { renderSoon(); Drive.soon(); });
+  Store.onChange(() => {
+    renderSoon(); Drive.soon();
+    // A photo opened before its full file finished uploading on the other phone: load it once it lands.
+    const v = $('#viewer'), w = v.dataset.waiting;
+    if (w && !v.hidden && Store.get(w)?.driveId) { delete v.dataset.waiting; viewer(w); }
+  });
   Drive.onChange(() => {
     const chip = $('.sync'); if (chip) chip.outerHTML = syncChip();
   });
