@@ -29,10 +29,10 @@ const Push = (() => {
     return rec;
   }
 
-  async function jwt(aud, v) {
+  async function jwt(aud, v, exp) {
     const key = await crypto.subtle.importKey('jwk', v.jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
     const head = b64u(te.encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
-    const body = b64u(te.encode(JSON.stringify({ aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: 'https://efem-code.github.io/oscar/' })));
+    const body = b64u(te.encode(JSON.stringify({ aud, exp: exp || Math.floor(Date.now() / 1000) + 12 * 3600, sub: 'https://efem-code.github.io/oscar/' })));
     const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, te.encode(head + '.' + body));
     return `${head}.${body}.${b64u(sig)}`;
   }
@@ -89,6 +89,23 @@ const Push = (() => {
     try { await enable(); } catch {}
   }
 
+  /* Tokens for the 8 am reminder, signed ahead of time (the script can't sign).
+     One per push service per day; each expires that evening. */
+  async function presign() {
+    const v = Store.get('vapid'); if (!v) return;
+    const auds = [...new Set(Store.list('pushsub', s => s.vapidPub === v.pub).map(s => new URL(s.endpoint).origin))];
+    if (!auds.length) return;
+    const days = []; for (let i = 0; i < 14; i++) { const d = new Date(); d.setDate(d.getDate() + i); days.push(dayKey(d)); }
+    const cur = Store.get('pushjwt');
+    if (cur && cur.pub === v.pub && auds.every(a => cur.tokens?.[a]?.[days[7]])) return;   // a week of runway left
+    const tokens = {};
+    for (const a of auds) {
+      tokens[a] = {};
+      for (const d of days) tokens[a][d] = await jwt(a, v, Math.floor((parseDay(d).getTime() + 20 * 36e5) / 1000));
+    }
+    await Store.put({ id: 'pushjwt', kind: 'config', pub: v.pub, tokens });
+  }
+
   /* ---- sending ---- */
   async function send(title, body, { includeSelf = false, tag = 'oscar', url = './#memories' } = {}) {
     const v = Store.get('vapid');
@@ -131,5 +148,5 @@ const Push = (() => {
   }
 
   const last = [];     // results of the latest send, for troubleshooting
-  return { last, _encrypt: encrypt, _jwt: jwt, supported, enabled, enable, disable, check, send, announce };
+  return { last, presign, _encrypt: encrypt, _jwt: jwt, supported, enabled, enable, disable, check, send, announce };
 })();

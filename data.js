@@ -75,3 +75,31 @@ const POISON_LINES = [
 ];
 
 const MILESTONES = ['Gotcha day', 'First night home', 'First vet visit', 'First walk', 'First bath', 'First night with no accidents', 'Learned sit', 'Lost first tooth', 'All puppy shots done', 'First snow', 'First swim', 'First birthday'];
+
+/* Getting ready for day one. Written for an older puppy coming home (Oscar is
+   ~6 months) — Jindo-leaning items are the fence, the bolting and the harness. */
+const PREP_LIST = {
+  'Home & safety': ['Check the fence for gaps, low spots and dig spots', 'Plan the doors so he can’t bolt out', 'Puppy-proof cords, shoes, bins and toxic plants', 'Crate set up in a quiet spot', 'Bed and blankets'],
+  'Gear': ['Collar with ID tag (your phone number)', 'Snug, escape-proof harness', '6 ft leash + long line for recall practice', 'Food and water bowls', 'Same food he eats now (switch slowly)', 'Training treats', 'Chew toys and a Kong / lick mat', 'Poop bags', 'Enzyme cleaner for accidents', 'Undercoat brush and nail clippers'],
+  'Paperwork': ['Vaccine & deworming records from the rescue/breeder', 'Microchip registered to your name', 'City dog licence', 'Pet insurance started', 'First vet visit booked (first week)'],
+  'Plan': ['Pick his potty spot outside', 'Agree on house rules and command words', 'Decide who feeds and walks when', 'Keep the first few days quiet'],
+};
+
+const SHOP_SUGGEST = ['Food', 'Treats', 'Poop bags', 'Chews', 'Enzyme cleaner', 'Flea & tick meds', 'Shampoo', 'Toys', 'Pee pads'];
+
+const EXPENSE_CATS = ['Food', 'Treats & chews', 'Vet', 'Meds', 'Insurance', 'Toys & gear', 'Grooming', 'Training', 'Walking & boarding', 'Licence & admin', 'Other'];
+
+/* Extra training goals and notes shown when the breed mentions Jindo. General
+   breed tendencies, not rules — every dog is its own dog. */
+const BREED_NOTES = {
+  jindo: {
+    skills: ['Recall on a long line', 'Calm around strangers', 'Door wait (no bolting)', 'Leave it (small animals)', 'Handling & nail trims'],
+    tips: [
+      'Jindos tend to be loyal, independent and reserved with strangers. Let him approach new people on his own terms and reward calm.',
+      'Many are very clean and house-train quickly — but a new home resets things, so stick to the schedule for the first weeks.',
+      'Strong prey drive and a reputation as escape artists: secure fences, leash in unfenced areas, and build recall on a long line before any off-leash time.',
+      'Short, varied training sessions work best — they get bored with repetition.',
+      'Double coat: expect heavy seasonal shedding; regular brushing and early nail-trim practice pay off.',
+    ],
+  },
+};

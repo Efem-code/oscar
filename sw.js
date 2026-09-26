@@ -51,13 +51,37 @@ self.addEventListener('fetch', e => {
 
 /* A phone posted photos: show it even when the app is closed. */
 self.addEventListener('push', e => {
-  let d = {};
-  try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data && e.data.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Puppy Log', {
-    body: d.body || 'Something new was added', tag: d.tag || 'oscar', renotify: true,
-    icon: 'icon-192.png', badge: 'icon-192.png', data: { url: d.url || './' },
-  }));
+  e.waitUntil((async () => {
+    let d = null;
+    try { d = e.data && e.data.text() ? e.data.json() : null; } catch { d = { body: e.data.text() }; }
+    if (!d) d = await healthReminder();          // empty push = the 8 am reminder
+    await self.registration.showNotification(d.title || 'Puppy Log', {
+      body: d.body || 'Something new was added', tag: d.tag || 'oscar', renotify: true,
+      icon: 'icon-192.png', badge: 'icon-192.png', data: { url: d.url || './' },
+    });
+  })());
 });
+
+/* Read this phone's own copy of the records and list what's due. Never create
+   the database here — an empty one would stop the app setting it up. */
+async function healthReminder() {
+  const fallback = { title: '💉 Health reminder', body: 'Something is due — open the app to see', tag: 'health', url: './#health' };
+  try {
+    if (indexedDB.databases && !(await indexedDB.databases()).some(x => x.name === 'oscar')) return fallback;
+    const db = await new Promise((res, rej) => { const r = indexedDB.open('oscar'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    if (!db.objectStoreNames.contains('recs')) { db.close(); return fallback; }
+    const recs = await new Promise(res => { const q = db.transaction('recs').objectStore('recs').getAll(); q.onsuccess = () => res(q.result); q.onerror = () => res([]); });
+    db.close();
+    const p = n => String(n).padStart(2, '0'), key = d => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    const today = key(new Date()), tomorrow = key(new Date(Date.now() + 864e5));
+    const due = recs.filter(r => r.kind === 'health' && !r.deleted && !r.done && r.due && r.due <= tomorrow).sort((a, b) => a.due < b.due ? -1 : 1);
+    if (!due.length) return fallback;
+    const pet = (recs.find(r => r.id === 'profile' && !r.deleted) || {}).name || 'Your puppy';
+    const when = r => r.due < today ? 'overdue' : r.due === today ? 'today' : 'tomorrow';
+    return { title: `💉 ${pet}: ${due.length === 1 ? due[0].name + ' due ' + when(due[0]) : due.length + ' health items due'}`,
+      body: due.slice(0, 4).map(r => `${r.name} — ${when(r)}`).join('\n'), tag: 'health', url: './#health' };
+  } catch { return fallback; }
+}
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();

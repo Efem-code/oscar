@@ -313,6 +313,40 @@ function timelineRow(r) {
 
 const VIEWS = {};
 
+/* ---------- getting ready, "who did what", shopping ---------- */
+const ago = iso => { const m = (Date.now() - T(iso)) / 6e4; return m < 1 ? 'just now' : m < 60 ? `${Math.round(m)} min ago` : m < 1440 ? `${fmtMin(m)} ago` : fmtDay(localDay(iso)); };
+
+function prepItems() {
+  const recs = Store.list('prep');
+  const byItem = new Map(recs.map(r => [r.item, r]));
+  const groups = Object.entries(PREP_LIST).map(([g, items]) => [g, items.map(i => ({ item: i, rec: byItem.get(i) }))]);
+  const custom = recs.filter(r => r.custom).map(r => ({ item: r.item, rec: r }));
+  if (custom.length) groups.push(['Our own', custom]);
+  const all = groups.flatMap(([, xs]) => xs);
+  return { groups, done: all.filter(x => x.rec?.done).length, total: all.length };
+}
+
+function homeCard() {
+  const h = P().homeDay; if (!h) return '';
+  const d = daysUntil(h), prep = prepItems();
+  if (d < -7 || (d < 0 && prep.done === prep.total)) return '';
+  const pct = Math.round(100 * prep.done / prep.total);
+  return `<section class="card home">
+    <div class="h-row"><div><div class="cd-label">${d > 0 ? 'Coming home' : d === 0 ? 'Home day' : 'Settling in'}</div>
+      <div class="cd-big">${d > 1 ? `in ${d} days` : d === 1 ? 'tomorrow!' : d === 0 ? 'today! 🎉' : `day ${1 - d}`}</div>
+      <p class="muted small">${fmtDay(h)}</p></div><div class="big-emoji">🏠</div></div>
+    <button class="prep-bar" data-act="prep"><i style="width:${pct}%"></i><span>Getting ready: ${prep.done}/${prep.total}</span></button>
+  </section>`;
+}
+
+function whoLine() {
+  const last = t => Store.list('log', r => r.type === t)[0];
+  const bits = [['meal', 'Fed'], ['walk', 'Walked'], ['pee', 'Pee']].map(([t, l]) => { const r = last(t); return r ? `<span><b>${l}</b> ${ago(r.at)}${r.by ? ' · ' + esc(r.by) : ''}</span>` : ''; }).filter(Boolean);
+  return bits.length ? `<div class="who">${bits.join('')}</div>` : '';
+}
+
+const shopItems = () => Store.list('shop').sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.at < b.at ? 1 : -1));
+
 VIEWS.today = () => {
   const home = App.homeDay();
   const sub = [App.ageText(), home > 0 ? `day ${home} home` : ''].filter(Boolean).join(' · ') || 'Welcome!';
@@ -324,7 +358,9 @@ VIEWS.today = () => {
   const needPortrait = wk != null && wk >= 0 && !Store.list('media', r => r.portrait && App.weekOf(r.at) === wk).length;
   return `${header(sub)}
     <div class="cols"><div>
-    ${countdownCard()}
+    ${homeCard()}
+    ${P().homeDay && daysUntil(P().homeDay) > 0 && !Store.list('log').length ? '' : countdownCard()}
+    ${whoLine()}
     <section class="quick">${LOG_TYPES.map(t => `<button data-act="log" data-k="${t.k}" class="q-${t.k}"><span>${t.icon}</span>${t.label}</button>`).join('')}</section>
     <section class="capture">
       <button data-act="capture" data-k="photo">📷 Photo</button>
@@ -343,6 +379,7 @@ VIEWS.today = () => {
       <div class="timeline">${sum.logs.length ? sum.logs.map(timelineRow).join('') : '<p class="muted pad">Nothing logged yet.</p>'}</div>
     </section>
     ${due.length ? `<section class="card"><h3>Coming up</h3>${due.map(healthRow).join('')}</section>` : ''}
+    ${shopItems().some(x => !x.done) ? `<button class="card chipcard" data-act="shop">🛒 <b>${shopItems().filter(x => !x.done).length} on the shopping list</b> <span class="muted">${esc(shopItems().filter(x => !x.done).slice(0, 3).map(x => x.text).join(', '))}</span></button>` : ''}
     </div></div>`;
 };
 
@@ -355,6 +392,7 @@ VIEWS.health = () => {
   return `${header('Health & vet')}
     <div class="cols"><div>
     <section class="card"><div class="h-row"><h3>Due</h3><button class="pill" data-act="addHealth">+ Reminder</button></div>
+      ${due.filter(r => daysUntil(r.due) < 0).length > 1 ? `<button class="banner" data-act="reviewPast">📋 ${due.filter(r => daysUntil(r.due) < 0).length} past due — already done before he came home? <b>Review</b></button>` : ''}
       ${due.length ? due.map(healthRow).join('') : '<p class="muted">Nothing scheduled.</p>'}
       ${!Store.list('health').length ? `<div class="empty">
         <p>Start from a typical first-year schedule (DHPP, lepto, bordetella, rabies, deworming, flea & tick) and edit it to match what your vet says.</p>
@@ -412,6 +450,8 @@ VIEWS.grow = () => {
   const wksLeft = d == null ? null : Math.ceil((16 * 7 - d) / 7);
   return `${header('Training & growing up')}
     <div class="cols"><div>
+    ${breedNotes() ? `<section class="card breed"><details><summary><b>🐕 About ${esc(P().breed)}s</b> <span class="muted small">tendencies, not rules</span></summary>
+      <ul>${breedNotes().tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details></section>` : ''}
     <section class="card"><div class="h-row"><h3>Training</h3><button class="pill" data-act="addSkill">+ Skill</button></div>
       <div class="skills">${skillList().map(skillCard).join('')}</div></section>
     ${pottyStats()}
@@ -425,8 +465,9 @@ VIEWS.grow = () => {
     </div></div>`;
 };
 
+const breedNotes = () => { const b = (P().breed || '').toLowerCase(); return Object.entries(BREED_NOTES).find(([k]) => b.includes(k))?.[1] || null; };
 function skillList() {
-  const extra = new Set(Store.list('train').map(r => r.skill));
+  const extra = new Set([...(breedNotes()?.skills || []), ...Store.list('train').map(r => r.skill)]);
   (P().skills || []).forEach(s => extra.add(s));
   return [...new Set([...SKILLS, ...extra])];
 }
@@ -557,6 +598,9 @@ VIEWS.more = () => {
         <span><b>${esc(c.name)}</b><small>${esc(c.role)}${c.notes ? ' · ' + esc(c.notes) : ''}</small></span></button>${c.phone ? `<a class="pill" href="tel:${esc(c.phone)}">Call</a>` : ''}</div>`).join('')}
       ${!contacts.some(c => c.role === 'Poison helpline') ? '<button class="link" data-act="poison">+ Add pet poison helplines</button>' : ''}
     </section>
+    <section class="card"><div class="h-row"><h3>🛒 Shopping</h3><button class="pill" data-act="shop">Open</button></div>
+      ${shopItems().filter(x => !x.done).length ? `<p>${esc(shopItems().filter(x => !x.done).map(x => x.text).join(', '))}</p>` : '<p class="muted">Nothing on the list. Adding something can ping the other phone.</p>'}</section>
+    ${spendCard()}
     <section class="card"><div class="h-row"><h3>💡 Ideas & requests</h3><button class="pill" data-act="wish">+ Add</button></div>
       <p class="small muted">Features you’d like, things that bug you, notes for later. Shared between both phones.</p>
       ${wishes().map(w => `<div class="item wish ${w.done ? 'done' : ''}"><button class="tick" data-act="wishDone" data-id="${w.id}" aria-label="Mark done">${w.done ? '✅' : '⬜'}</button>
@@ -564,6 +608,8 @@ VIEWS.more = () => {
       ${wishes().length ? '<button class="link" data-act="wishCopy">Copy list</button>' : ''}
     </section>
     <section class="card"><h3>Share & export</h3>
+      <button class="item-main block" data-act="book"><span class="ico">📖</span><span><b>${esc(App.pet())}’s photo book</b><small>Portraits, milestones and favourites as a printable book (PDF)</small></span></button>
+      <button class="item-main block" data-act="prep"><span class="ico">🏠</span><span><b>Getting-ready checklist</b><small>${prepItems().done}/${prepItems().total} done</small></span></button>
       <button class="item-main block" data-act="careSheet"><span class="ico">📋</span><span><b>Care sheet</b><small>One page for a sitter, groomer or new vet — print or share</small></span></button>
       <button class="item-main block" data-act="syncSettings"><span class="ico">☁️</span><span><b>Sync & sharing</b><small>${esc(syncLine())}</small></span></button>
       <button class="item-main block" data-act="backup"><span class="ico">💾</span><span><b>Backup</b><small>Save or restore everything as a file</small></span></button>
@@ -914,6 +960,160 @@ ACT.syncSettings = () => {
     $('#snow', r) && ($('#snow', r).onclick = () => { Drive.sync(); closeSheet(); });
   });
 };
+
+/* ---------- getting ready ---------- */
+ACT.prep = () => {
+  const { groups, done, total } = prepItems();
+  sheet(`<h2>🏠 Getting ready</h2><p class="muted">${done} of ${total} done — shared with both phones.</p>
+    ${groups.map(([g, xs]) => `<h4>${esc(g)}</h4>${xs.map(x => `<button class="check ${x.rec?.done ? 'on' : ''}" data-item="${esc(x.item)}">
+      <span>${x.rec?.done ? '✅' : '⬜'}</span><span>${esc(x.item)}${x.rec?.done && x.rec.by ? `<small>${esc(x.rec.by)}</small>` : ''}</span></button>`).join('')}`).join('')}
+    <div class="inline" style="margin-top:12px"><input id="prep-new" placeholder="Add your own…"><button class="pill" id="prep-add">Add</button></div>`, r => {
+    r.querySelectorAll('.check').forEach(b => b.onclick = async () => {
+      const item = b.dataset.item, rec = Store.list('prep', x => x.item === item)[0];
+      await Store.put(rec ? { id: rec.id, done: !rec.done } : { kind: 'prep', item, done: true });
+      ACT.prep(); $('#sheet-body').scrollTop = 0;
+    });
+    $('#prep-add', r).onclick = async () => { const v = $('#prep-new', r).value.trim(); if (v) { await Store.put({ kind: 'prep', item: v, custom: true, done: false }); ACT.prep(); } };
+  });
+};
+
+/* ---------- shopping ---------- */
+ACT.shop = () => {
+  const items = shopItems();
+  sheet(`<h2>🛒 Shopping list</h2>
+    <div class="inline"><input id="shop-new" placeholder="What do we need?"><button class="pill" id="shop-add">Add</button></div>
+    <label class="tog"><input type="checkbox" id="shop-ping" ${Store.pref('oscar.shopPing') !== '0' ? 'checked' : ''}> Let the other phone know</label>
+    <div class="chips small">${SHOP_SUGGEST.map(x => `<button class="chip" data-s="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+    <div style="margin-top:10px">${items.map(x => `<div class="item wish ${x.done ? 'done' : ''}"><button class="tick" data-t="${x.id}">${x.done ? '✅' : '⬜'}</button>
+      <span class="item-main"><span><b>${esc(x.text)}</b><small>${esc(x.by || '')} · ${ago(x.at)}</small></span></span><button class="pill" data-del="${x.id}">✕</button></div>`).join('') || '<p class="muted">Nothing needed right now.</p>'}</div>
+    ${items.some(x => x.done) ? '<button class="link" id="shop-clear">Clear bought items</button>' : ''}`, r => {
+    const add = async text => {
+      if (!text) return;
+      await Store.put({ kind: 'shop', text });
+      Store.setPref('oscar.shopPing', $('#shop-ping', r).checked ? '1' : '0');
+      if ($('#shop-ping', r).checked) Drive.sync().then(() => Push.send(`🛒 ${App.pet()} needs ${text.toLowerCase()}`, `${Store.who()} added it to the shopping list`, { tag: 'shop', url: './#today' })).catch(() => {});
+      ACT.shop();
+    };
+    $('#shop-add', r).onclick = () => add($('#shop-new', r).value.trim());
+    $('#shop-new', r).onkeydown = e => { if (e.key === 'Enter') add(e.target.value.trim()); };
+    r.querySelectorAll('[data-s]').forEach(b => b.onclick = () => add(b.dataset.s));
+    r.querySelectorAll('[data-t]').forEach(b => b.onclick = async () => { const x = Store.get(b.dataset.t); await Store.put({ id: x.id, done: !x.done }); ACT.shop(); });
+    r.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { await Store.remove(b.dataset.del); ACT.shop(); });
+    $('#shop-clear', r) && ($('#shop-clear', r).onclick = async () => { for (const x of items.filter(x => x.done)) await Store.remove(x.id); ACT.shop(); });
+  });
+};
+
+/* ---------- spending ---------- */
+/* Everything with a price: logged expenses plus vet visit costs, minus
+   insurance reimbursements. */
+function spendRows() {
+  const rows = Store.list('expense').map(e => ({ at: e.at, amount: Number(e.amount) || 0, cat: e.cat || 'Other', note: e.note, id: e.id }));
+  Store.list('vet', v => v.cost).forEach(v => rows.push({ at: v.at, amount: Number(v.cost), cat: 'Vet', note: v.reason, vet: v.id }));
+  Store.list('claim', c => c.reimbursed).forEach(c => rows.push({ at: c.at, amount: -Number(c.reimbursed), cat: 'Insurance back', note: c.desc, claim: c.id }));
+  return rows.sort((a, b) => a.at < b.at ? 1 : -1);
+}
+function spendCard() {
+  const rows = spendRows(), ym = todayKey().slice(0, 7);
+  const month = rows.filter(r => localDay(r.at).startsWith(ym)).reduce((a, r) => a + r.amount, 0);
+  const total = rows.reduce((a, r) => a + r.amount, 0);
+  return `<section class="card"><div class="h-row"><h3>💰 Spending</h3><button class="pill" data-act="expense">+ Expense</button></div>
+    ${rows.length ? `<div class="big-num">${money(month)}<small>this month · ${money(total)} since the start</small></div>
+      <button class="link" data-act="spend">See by month & category</button>` : '<p class="muted">Food, vet bills, gear, insurance — vet visit costs and insurance payouts count automatically.</p>'}</section>`;
+}
+ACT.expense = d => {
+  const r = d.id ? Store.get(d.id) : null;
+  form({ title: '💰 Expense', value: r ? { ...r, day: localDay(r.at) } : { day: todayKey(), cat: 'Food' }, fields: [
+    { type: 'row', fields: [{ k: 'amount', label: 'Amount ($)', type: 'number', required: true }, { k: 'day', label: 'Date', type: 'date' }] },
+    { k: 'cat', label: 'Category', type: 'select', options: EXPENSE_CATS }, { k: 'note', label: 'What for', ph: 'e.g. 12 kg bag of food' }],
+    onSave: v => { const { day, ...x } = v; const at = new Date(parseDay(day || todayKey()).getTime() + 12 * 36e5).toISOString(); return Store.put(r ? { id: r.id, ...x, at } : { kind: 'expense', ...x, at }); },
+    onDelete: r ? () => Store.remove(r.id) : null });
+};
+ACT.spend = () => {
+  const rows = spendRows(), months = {};
+  for (const r of rows) { const m = localDay(r.at).slice(0, 7); (months[m] = months[m] || { total: 0, cats: {}, rows: [] }); months[m].total += r.amount; months[m].cats[r.cat] = (months[m].cats[r.cat] || 0) + r.amount; months[m].rows.push(r); }
+  sheet(`<h2>💰 Spending</h2>${Object.entries(months).map(([m, x]) => `<details ${m === todayKey().slice(0, 7) ? 'open' : ''}><summary><b>${parseDay(m + '-01').toLocaleDateString([], { month: 'long', year: 'numeric' })}</b> · ${money(x.total)}</summary>
+    <div class="chips small">${Object.entries(x.cats).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<span class="chip">${esc(c)} ${money(v)}</span>`).join('')}</div>
+    ${x.rows.map(r => `<button class="item-main block" ${r.id ? `data-act="expense" data-id="${r.id}"` : r.vet ? `data-act="showVet" data-id="${r.vet}"` : `data-act="claim" data-id="${r.claim}"`}><span><b>${money(r.amount)} · ${esc(r.cat)}</b><small>${fmtDay(localDay(r.at))}${r.note ? ' · ' + esc(r.note) : ''}</small></span></button>`).join('')}</details>`).join('') || '<p class="muted">Nothing yet.</p>'}`);
+};
+
+/* ---------- past-due health items ---------- */
+/* The typical schedule assumes a young puppy; an older one arrives with most
+   of it done. Tick what his records show and set them done in one go. */
+ACT.reviewPast = () => {
+  const past = dueItems().filter(r => daysUntil(r.due) < 0);
+  sheet(`<h2>📋 Already done?</h2>
+    <p class="muted">These are before today. Tick the ones his rescue/breeder records show as done.</p>
+    <div class="fld"><label>Done on <small>leave blank if you don’t know the exact date</small></label><input type="date" id="rp-date"></div>
+    ${past.map(r => `<label class="check"><input type="checkbox" value="${r.id}" checked><span>${HEALTH_CATS[r.cat]?.icon || ''} ${esc(r.name)}<small>was due ${fmtDay(r.due)}</small></span></label>`).join('')}
+    <div class="btns"><button class="danger" id="rp-del">Remove ticked</button><span class="grow"></span><button class="primary" id="rp-done">Mark ticked done</button></div>`, r => {
+    const picked = () => [...r.querySelectorAll('input[type=checkbox]:checked')].map(x => x.value);
+    $('#rp-done', r).onclick = async () => {
+      const d = $('#rp-date', r).value;
+      for (const id of picked()) {
+        const x = Store.get(id);
+        await Store.put({ id, done: d || x.due, notes: [x.notes, d ? '' : 'From records — exact date not known'].filter(Boolean).join(' · ') });
+        if (x.every) await Store.put({ kind: 'health', cat: x.cat, name: x.name, every: x.every, unit: x.unit, due: addUnit(d || todayKey(), Number(x.every), x.unit) });
+      }
+      closeSheet(); toast('Updated');
+    };
+    $('#rp-del', r).onclick = async () => { if (confirm('Remove the ticked reminders?')) { for (const id of picked()) await Store.remove(id); closeSheet(); } };
+  });
+};
+
+/* ---------- photo book ---------- */
+/* Square pages (8.5 in) laid out in the browser, then printed or saved as a
+   PDF. Portraits in a 2×2 growth grid, a page per milestone, favourites
+   full-bleed. Images come from the screen-size copies, so it stays quick. */
+ACT.book = () => form({ title: '📖 Photo book', saveLabel: 'Make the book',
+  intro: '<p class="muted">Builds the pages here; then Print → Save as PDF. Great for a photo lab, or keep it as a keepsake file.</p>',
+  value: { title: `${App.pet()}’s first year`, what: 'best', from: P().homeDay || '', to: todayKey() },
+  fields: [{ k: 'title', label: 'Title', required: true },
+    { k: 'what', label: 'Include', type: 'select', options: [['best', 'Portraits, milestones & starred photos'], ['all', 'Everything — every photo']] },
+    { type: 'row', fields: [{ k: 'from', label: 'From', type: 'date' }, { k: 'to', label: 'To', type: 'date' }] }],
+  onSave: v => { setTimeout(() => buildBook(v), 50); } });
+
+async function buildBook(v) {
+  const inRange = r => (!v.from || localDay(r.at) >= v.from) && (!v.to || localDay(r.at) <= v.to);
+  const photos = Store.list('media', r => !r.doc && !r.video && inRange(r)).reverse();
+  const portraits = photos.filter(r => r.portrait);
+  const milestones = Store.list('milestone', inRange).reverse();
+  const msMedia = new Set(milestones.map(m => m.mediaId));
+  const rest = photos.filter(r => !r.portrait && !msMedia.has(r.id) && (v.what === 'all' || r.star));
+  const cover = portraits[portraits.length - 1] || photos.find(r => r.star) || photos[0];
+  const el = $('#book');
+  el.hidden = false;
+  el.innerHTML = `<div class="book-bar"><button id="bk-close">✕</button><span id="bk-status">Gathering photos…</span><button class="primary" id="bk-print" disabled>Print / Save PDF</button></div><div class="pages"></div>`;
+  $('#bk-close').onclick = () => { el.hidden = true; el.innerHTML = ''; };
+  const need = [cover, ...portraits, ...milestones.map(m => Store.get(m.mediaId)).filter(x => x && !x.video), ...rest].filter(Boolean);
+  const url = {};
+  let n = 0;
+  for (const r of need) {
+    if (url[r.id]) continue;
+    $('#bk-status').textContent = `Gathering photos… ${++n}/${need.length}`;
+    try { url[r.id] = await Media.fullURL(r); } catch { url[r.id] = await Media.thumbURL(r); }
+  }
+  const img = r => r && url[r.id] ? `<img src="${url[r.id]}" alt="">` : '<div class="noimg">🐾</div>';
+  const pages = [];
+  pages.push(`<section class="page cover">${img(cover)}<div class="cover-t"><h1>${esc(v.title)}</h1><p>${esc([P().breed, P().birthday && 'born ' + fmtDate(P().birthday)].filter(Boolean).join(' · '))}</p></div></section>`);
+  for (let i = 0; i < portraits.length; i += 4) {
+    pages.push(`<section class="page grid4">${i === 0 ? '<h2>Growing up</h2>' : ''}<div class="g4">${portraits.slice(i, i + 4).map(r => `<figure>${img(r)}<figcaption>${App.weekOf(r.at) != null ? App.weekOf(r.at) + ' weeks' : fmtDate(localDay(r.at))}</figcaption></figure>`).join('')}</div></section>`);
+  }
+  for (const m of milestones) {
+    const r = Store.get(m.mediaId);
+    pages.push(`<section class="page ms">${r && !r.video ? img(r) : '<div class="noimg big">⭐</div>'}<div class="ms-t"><h2>${esc(m.title)}</h2><p class="d">${fmtDate(localDay(m.at))}${App.weekOf(m.at) != null ? ' · ' + App.weekOf(m.at) + ' weeks old' : ''}</p>${m.note ? `<p>${esc(m.note)}</p>` : ''}</div></section>`);
+  }
+  for (const r of rest) pages.push(`<section class="page solo">${img(r)}<p>${esc(r.caption || '')}<span>${fmtDate(localDay(r.at))}</span></p></section>`);
+  el.querySelector('.pages').innerHTML = pages.join('');
+  $('#bk-status').textContent = `${pages.length} pages`;
+  $('#bk-print').disabled = false;
+  $('#bk-print').onclick = () => {
+    // Square pages only while printing the book — the care sheet stays on normal paper.
+    const st = document.createElement('style'); st.textContent = '@page { size: 8.5in 8.5in; margin: 0; }';
+    document.head.appendChild(st); document.body.classList.add('print-book');
+    window.print();
+    setTimeout(() => { document.body.classList.remove('print-book'); st.remove(); }, 800);
+  };
+}
 
 /* ---------- ideas & requests ---------- */
 ACT.wish = d => {

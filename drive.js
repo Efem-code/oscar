@@ -206,7 +206,7 @@ const Drive = (() => {
     await push(files);          // logs before media, so a slow video never holds up a pee log
     await flushUploads();
     await push(files);          // the new Drive ids from the uploads
-    try { await Push.check(); await Push.announce(); await push(files); } catch {}
+    try { await Push.check(); await Push.announce(); await Push.presign(); await push(files); } catch {}
   }
 
   /* Self-repair: a photo this phone took that never reached Drive and has

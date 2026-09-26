@@ -141,8 +141,59 @@ const ACTIONS = {
     return { status: r.getResponseCode(), text: r.getContentText().slice(0, 200) };
   },
 
+  /* Daily reminders: what would be sent (dry) or send now; and install the 8 am trigger. */
+  reminders: q => ({ result: dailyReminders(!!q.dry) }),
+  setupReminders: () => ({ result: setupReminders() }),
+
   trash: q => { DriveApp.getFileById(q.id).setTrashed(true); return {}; },
 };
+
+/* ---- daily health reminders ----
+   Runs at 8 am from a time trigger. Reads the synced records, and if a vaccine,
+   dose or check-up is due today/tomorrow (or overdue), sends an empty Web Push
+   to each phone. The phone's service worker reads its own copy of the data to
+   say exactly what's due. Push tokens are pre-signed by the phones (the script
+   can't do the P-256 signing itself), one per day, two weeks ahead. */
+function loadRecs_() {
+  const map = {}, it = sub_('sync').getFiles();
+  while (it.hasNext()) {
+    const f = it.next();
+    if (f.getName().indexOf('log-') !== 0) continue;
+    let d; try { d = JSON.parse(f.getBlob().getDataAsString('UTF-8')); } catch (e) { continue; }
+    (d.recs || []).forEach(r => {
+      const c = map[r.id];
+      if (!c || r.updated > c.updated || (r.updated === c.updated && r.dev > c.dev)) map[r.id] = r;
+    });
+  }
+  return map;
+}
+
+function dailyReminders(dry) {
+  const recs = loadRecs_(), tz = Session.getScriptTimeZone();
+  const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  const tomorrow = Utilities.formatDate(new Date(Date.now() + 864e5), tz, 'yyyy-MM-dd');
+  const due = Object.keys(recs).map(k => recs[k]).filter(r => r.kind === 'health' && !r.deleted && !r.done && r.due && r.due <= tomorrow);
+  if (!due.length) return 'nothing due';
+  const v = recs.vapid, tok = recs.pushjwt;
+  if (!v || !tok || tok.pub !== v.pub) return 'no push tokens yet';
+  const subs = Object.keys(recs).map(k => recs[k]).filter(r => r.kind === 'pushsub' && !r.deleted && r.vapidPub === v.pub);
+  const out = [];
+  subs.forEach(s => {
+    const aud = s.endpoint.match(/^https:\/\/[^/]+/)[0], jwt = tok.tokens && tok.tokens[aud] && tok.tokens[aud][today];
+    if (!jwt) { out.push(s.name + ': no token for ' + today); return; }
+    if (dry) { out.push(s.name + ': would send (' + due.length + ' due)'); return; }
+    const r = UrlFetchApp.fetch(s.endpoint, { method: 'post', payload: '', muteHttpExceptions: true,
+      headers: { Authorization: 'vapid t=' + jwt + ', k=' + v.pub, TTL: '43200', Urgency: 'normal' } });
+    out.push(s.name + ': ' + r.getResponseCode());
+  });
+  return out.join('; ') || 'no phones subscribed';
+}
+
+function setupReminders() {
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyReminders') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('dailyReminders').timeBased().everyDays(1).atHour(8).create();
+  return 'daily at 8 (' + Session.getScriptTimeZone() + ')';
+}
 
 /* Run this once from the editor (select "authorize" → Run) if Deploy doesn't
    ask for permissions. It just touches Drive and UrlFetch so both get granted. */
