@@ -137,7 +137,12 @@ const Drive = (() => {
     for (let i = 0; i < queue.length; i++) {
       const p = queue[i];
       const rec = Store.get(p.recId);
-      if (!rec) { await Store.pendDel(p.id); continue; }
+      if (!rec) {
+        // Only drop the upload if the photo was really deleted — not merely unknown to this copy.
+        const r = await Store.raw(p.recId);
+        if (!r || r.deleted) await Store.pendDel(p.id);
+        continue;
+      }
       state.upload = { name: p.name, n: i + 1, of: queue.length, frac: 0 }; emit();
       const id = await upload(p, frac => { state.upload.frac = frac; emit(); });
       await Store.put({ id: rec.id, [p.role === 'thumb' ? 'thumbId' : 'driveId']: id });
@@ -152,10 +157,11 @@ const Drive = (() => {
     if (!navigator.onLine) { set('offline', 'Offline — saved on this phone'); return; }
     busy = true; set('syncing');
     try {
-      const files = await pull();
-      await push(files);          // logs before media, so a slow video never holds up a pee log
-      await flushUploads();
-      await push(files);          // the new Drive ids from the uploads
+      /* One sync at a time across every open copy of the app. */
+      const ran = navigator.locks
+        ? await navigator.locks.request('oscar-sync', { ifAvailable: true }, lock => lock ? syncOnce().then(() => true) : false)
+        : (await syncOnce(), true);
+      if (!ran) { set('idle'); return; }
       state.last = Date.now();
       set('idle');
     } catch (e) {
@@ -164,6 +170,31 @@ const Drive = (() => {
     } finally {
       busy = false;
       if (again) { again = false; setTimeout(sync, 500); }
+    }
+  }
+
+  async function syncOnce() {
+    await Store.refresh();
+    await requeueMissing();
+    const files = await pull();
+    await push(files);          // logs before media, so a slow video never holds up a pee log
+    await flushUploads();
+    await push(files);          // the new Drive ids from the uploads
+  }
+
+  /* Self-repair: a photo this phone took that never reached Drive and has
+     nothing queued gets re-queued from the copies still on the phone. */
+  async function requeueMissing() {
+    const queued = new Set((await Store.pendAll()).map(p => p.id));
+    for (const rec of Store.list('media', r => (r.src || r.dev) === Store.dev)) {
+      if (!rec.thumbId && !queued.has('t:' + rec.id)) {
+        const b = await Store.blobGet('t:' + rec.id);
+        if (b) await Store.pendAdd({ id: 't:' + rec.id, recId: rec.id, role: 'thumb', blob: b, mime: 'image/jpeg', name: `thumb-${rec.id}.jpg` });
+      }
+      if (!rec.driveId && !queued.has('f:' + rec.id)) {
+        const b = await Store.blobGet('p:' + rec.id);   // portraits keep a phone copy
+        if (b) await Store.pendAdd({ id: 'f:' + rec.id, recId: rec.id, role: 'full', blob: b, mime: 'image/jpeg', name: rec.name, ym: rec.at.slice(0, 7), doc: !!rec.doc });
+      }
     }
   }
 

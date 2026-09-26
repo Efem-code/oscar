@@ -43,6 +43,25 @@ const Store = (() => {
   const kvGet = k => req(os('kv').get(k));
   const kvSet = (k, v) => req(os('kv', 'readwrite').put(v, k));
 
+  /* The same app can be open twice at once — the installed app and a Chrome
+     tab share this database but not memory. Each copy tells the others what
+     it wrote, and sync re-reads the database first, so neither acts on a
+     stale picture. (A stale copy once threw away a queued photo upload
+     because it had never seen the photo.) */
+  const bc = 'BroadcastChannel' in self ? new BroadcastChannel('oscar-store') : null;
+  if (bc) bc.onmessage = async e => {
+    for (const id of e.data.ids || []) { const r = await req(os('recs').get(id)); if (r) recs.set(id, r); }
+    emit();
+  };
+  const tell = ids => { try { bc && bc.postMessage({ ids }); } catch {} };
+
+  /* Reload everything from the database — call before acting on the whole set. */
+  async function refresh() {
+    for (const rec of await req(os('recs').getAll())) recs.set(rec.id, rec);
+    for (const k of (await kvGet('dirty')) || []) if (!dirty.has(k)) dirty.set(k, ++gen);
+  }
+  const raw = id => req(os('recs').get(id));
+
   function emit() { for (const f of listeners) f(); }
   const onChange = f => listeners.add(f);
 
@@ -72,6 +91,7 @@ const Store = (() => {
     recs.set(rec.id, rec);
     await req(os('recs', 'readwrite').put(rec));
     await markDirty(rec.shard);
+    tell([rec.id]);
     emit();
     return rec;
   }
@@ -84,15 +104,15 @@ const Store = (() => {
   async function merge(list) {
     const t = db.transaction('recs', 'readwrite');
     const s = t.objectStore('recs');
-    let n = 0;
+    const changed = [];
     for (const r of list) {
       if (!r || !r.id || !r.updated) continue;
       const cur = recs.get(r.id);
-      if (!cur || newer(r, cur)) { recs.set(r.id, r); s.put(r); n++; }
+      if (!cur || newer(r, cur)) { recs.set(r.id, r); s.put(r); changed.push(r.id); }
     }
     await done(t);
-    if (n) emit();
-    return n;
+    if (changed.length) { tell(changed); emit(); }
+    return changed.length;
   }
 
   const get = id => { const r = recs.get(id); return r && !r.deleted ? r : null; };
@@ -127,7 +147,7 @@ const Store = (() => {
   const pendDel = id => req(os('pending', 'readwrite').delete(id));
 
   return {
-    open, onChange, put, remove, merge, get, list, everything, newId, who,
+    open, onChange, put, remove, merge, get, list, everything, newId, who, refresh, raw,
     kvGet, kvSet, dirtyShards, cleanShard, ownShard, markAllDirty,
     blobGet, blobPut, blobDel, pendAll, pendAdd, pendDel,
     get dev() { return dev; },

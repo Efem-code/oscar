@@ -58,7 +58,7 @@ const Media = (() => {
     const label = safe(extra.caption) || (extra.portrait ? `Week ${App.weekOf(at) ?? ''} portrait` : pet);
     const name = `${stamp(d)} ${label}.${ext(file)}`;
     const rec = await Store.put({
-      kind: 'media', at, mime: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+      kind: 'media', src: Store.dev, at, mime: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
       name, size: file.size, w: t.w, h: t.h, duration: t.duration, video: isVideo,
       caption: extra.caption || '', portrait: !!extra.portrait, doc: !!extra.doc, star: !!extra.star,
     });
