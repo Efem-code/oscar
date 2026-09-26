@@ -82,7 +82,7 @@ const Media = (() => {
     const key = 't:' + rec.id;
     if (urls.has(key)) return urls.get(key);
     let b = await Store.blobGet(key);
-    if (!b && rec.thumbId && Drive.hasToken()) {
+    if (!b && rec.thumbId && Drive.configured()) {
       try { b = await Drive.download(rec.thumbId); await Store.blobPut(key, b); } catch { b = null; }
     }
     if (!b) return null;

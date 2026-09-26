@@ -251,7 +251,7 @@ function avatar(cls = '') {
 function syncChip() {
   const s = Drive.state;
   const map = {
-    off: ['off', 'Not syncing'], nofolder: ['off', 'Set up sharing'], auth: ['warn', 'Tap to sync'],
+    off: ['off', 'Not syncing'],
     offline: ['off', 'Offline'], error: ['warn', 'Sync problem'], syncing: ['busy', 'Syncing…'],
     idle: ['ok', s.last ? 'Synced' : 'Connected'],
   };
@@ -568,8 +568,8 @@ VIEWS.more = () => {
 const kv = (k, v) => v ? `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>` : '';
 function syncLine() {
   const s = Drive.state;
-  if (!Drive.clientId()) return 'Not set up yet';
-  return ({ idle: 'Connected' + (s.last ? ' · synced ' + fmtTime(new Date(s.last).toISOString()) : ''), auth: 'Signed out — tap to sign in', nofolder: 'Signed in — pick a shared folder', error: 'Problem: ' + s.msg, offline: 'Offline', syncing: 'Syncing…' })[s.status] || 'Not connected';
+  if (!Drive.configured()) return 'Not set up yet';
+  return ({ idle: 'Connected' + (s.last ? ' · synced ' + fmtTime(new Date(s.last).toISOString()) : ''), error: 'Problem: ' + s.msg, offline: 'Offline — will sync later', syncing: 'Syncing…' })[s.status] || 'Connected';
 }
 
 /* ---------- actions ---------- */
@@ -780,7 +780,7 @@ async function onFiles(input) {
     await Store.put({ id: v.id, docs: [...(v.docs || []), ...made.map(m => m.id)] });
     return ACT.showVet({ id: v.id });
   }
-  toast(`Saved ${made.length > 1 ? made.length + ' items' : ''} — ${Drive.hasToken() ? 'uploading to Drive' : 'will upload when synced'}`,
+  toast(`Saved ${made.length > 1 ? made.length + ' items' : ''} — ${Drive.configured() ? 'uploading to Drive' : 'will upload when synced'}`,
     made.length === 1 ? [{ label: 'Add caption', run: () => viewer(made[0].id) }] : []);
 }
 ACT.portrait = () => Media.portraitCamera(rec => toast(`🐶 Week ${App.weekOf(rec.at) ?? ''} portrait saved`, [{ label: 'View', run: () => viewer(rec.id) }]));
@@ -865,48 +865,26 @@ ACT.flipbook = async () => {
 /* ---------- sync UI ---------- */
 ACT.syncTap = () => {
   const s = Drive.state.status;
-  if (s === 'auth') return Drive.signIn().then(() => Drive.sync()).catch(e => toast(esc(e.message)));
   if (s === 'idle' || s === 'error' || s === 'offline') { Drive.sync(); if (s !== 'error') return; }
   ACT.syncSettings();
 };
-ACT.syncSettings = async () => {
-  const root = await Drive.folderId();
-  const signed = Drive.hasToken();
+ACT.syncSettings = () => {
+  const on = Drive.configured();
   sheet(`<h2>☁️ Sync & sharing</h2>
-    <p class="muted">Everything is saved on this phone first and works offline. Sync copies it through a Google Drive folder you both share — photos and videos land there too, sorted by month.</p>
-    <div class="step ${Drive.clientId() ? 'ok' : ''}"><b>1. Google client ID</b>
-      <p class="small muted">One-time setup in Google Cloud — steps in SETUP.md. Paste the same ID on both phones.</p>
-      <div class="inline"><input id="cid" value="${esc(Drive.clientId())}" placeholder="…apps.googleusercontent.com"><button class="pill" id="cid-save">Save</button></div></div>
-    <div class="step ${signed ? 'ok' : ''}"><b>2. Sign in</b>
-      ${signed ? `<p>Signed in as <b>${esc(Store.pref('oscar.email') || '')}</b> <button class="link" id="sout">Sign out</button></p>` : `<p><button class="primary" id="sin" ${Drive.clientId() ? '' : 'disabled'}>Sign in with Google</button></p>`}</div>
-    <div class="step ${root ? 'ok' : ''}"><b>3. Shared folder</b>
-      ${root ? `<p>Connected. <a href="${Drive.folderLink(root)}" target="_blank" rel="noopener">Open in Drive</a> · <button class="link" id="fchange">Change</button></p>
-        <div class="inline"><input id="semail" type="email" placeholder="partner@gmail.com"><button class="pill" id="sshare">Share</button></div>
-        <p class="small muted">Gives them edit access. They then pick “Join” on their phone.</p>`
-      : signed ? `<p class="small muted">Paste the link to a Drive folder you made (Share → Copy link). You both need Editor access.</p>
-        <div class="inline"><input id="flink" value="${esc(DEFAULT_FOLDER_LINK)}" placeholder="https://drive.google.com/drive/folders/…"><button class="pill" id="fuse">Use</button></div>
-        <p class="small muted">Or let the app make one:</p>
-        <p><button class="ghost" id="fnew">Create ${esc(App.pet())}’s folder</button> <button class="ghost" id="ffind">Find a shared one</button></p><div id="flist"></div>`
-      : '<p class="muted small">Sign in first.</p>'}</div>
-    ${root && signed ? `<p><button class="primary" id="snow">Sync now</button> <span class="muted small">${esc(syncLine())}</span></p>` : ''}`, r => {
-    const again = () => ACT.syncSettings();
-    const run = (fn, ok) => async () => { try { await fn(); ok && toast(ok); again(); } catch (e) { toast(esc(e.message)); } };
-    $('#cid-save', r).onclick = () => { Store.setPref('oscar.clientId', $('#cid', r).value.trim()); again(); };
-    $('#sin', r) && ($('#sin', r).onclick = run(async () => { await Drive.signIn(); Drive.sync(); }, 'Signed in'));
-    $('#sout', r) && ($('#sout', r).onclick = run(async () => Drive.signOut()));
-    $('#fnew', r) && ($('#fnew', r).onclick = run(async () => { await Drive.createFolder(App.pet()); await Drive.sync(); }, 'Folder created'));
-    $('#fuse', r) && ($('#fuse', r).onclick = run(async () => { const name = await Drive.joinLink($('#flink', r).value); await Drive.sync(); toast(`Connected to “${esc(name)}” — syncing`); }));
-    $('#ffind', r) &&($('#ffind', r).onclick = async () => {
-      $('#flist', r).innerHTML = '<p class="muted">Looking…</p>';
-      try {
-        const fs = await Drive.findFolders();
-        $('#flist', r).innerHTML = fs.length ? fs.map(f => `<div class="item"><span class="item-main"><span class="ico">📁</span><span><b>${esc(f.name)}</b><small>${esc(f.owners?.[0]?.displayName || '')} ${esc(f.owners?.[0]?.emailAddress || '')}</small></span></span><button class="pill" data-join="${f.id}">Join</button></div>`).join('')
-          : '<p class="muted">No shared puppy folder found yet. Ask them to share it from their phone first.</p>';
-        $('#flist', r).querySelectorAll('[data-join]').forEach(b => b.onclick = run(async () => { await Drive.joinFolder(b.dataset.join); await Drive.sync(); }, 'Joined — syncing'));
-      } catch (e) { $('#flist', r).innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+    <p class="muted">Everything is saved on this phone first and works offline. Sync copies it into your shared Google Drive folder — photos and videos land there too, sorted by month.</p>
+    ${on ? `<div class="step ok"><b>Connected to “${esc(Drive.folderName())}”</b>
+        <p>${Drive.folderLink() ? `<a href="${Drive.folderLink()}" target="_blank" rel="noopener">Open in Drive</a> · ` : ''}<button class="link" id="disc">Disconnect</button></p>
+        <p class="small muted">${esc(syncLine())}</p></div>
+        <p><button class="primary" id="snow">Sync now</button></p>`
+    : `<div class="step"><b>Connection code</b>
+        <p class="small muted">Paste the code from the Puppy Log bridge (see SETUP.md). Use the same code on both phones — no Google sign-in needed.</p>
+        <div class="inline"><input id="ccode" placeholder="paste code"><button class="pill" id="cgo">Connect</button></div></div>`}`, r => {
+    $('#cgo', r) && ($('#cgo', r).onclick = async () => {
+      const b = $('#cgo', r); b.disabled = true; b.textContent = 'Checking…';
+      try { const name = await Drive.connect($('#ccode', r).value); toast(`Connected to “${esc(name)}” — syncing`); Drive.sync(); ACT.syncSettings(); }
+      catch (e) { toast(esc(e.message)); b.disabled = false; b.textContent = 'Connect'; }
     });
-    $('#fchange', r) && ($('#fchange', r).onclick = run(async () => { if (confirm('Disconnect from this folder? Nothing is deleted.')) await Store.kvSet('folders', {}); }));
-    $('#sshare', r) && ($('#sshare', r).onclick = run(async () => { const e = $('#semail', r).value.trim(); if (!e) throw new Error('Enter their Google email'); await Drive.share(e); }, 'Shared — they’ll get an email'));
+    $('#disc', r) && ($('#disc', r).onclick = () => { if (confirm('Stop syncing on this phone? Nothing is deleted.')) { Drive.disconnect(); ACT.syncSettings(); } });
     $('#snow', r) && ($('#snow', r).onclick = () => { Drive.sync(); closeSheet(); });
   });
 };
@@ -999,6 +977,7 @@ window.addEventListener('popstate', () => { if (!$('#sheet').hidden) closeSheet(
     const chip = $('.sync'); if (chip) chip.outerHTML = syncChip();
   });
   render();
+  Drive.fromHash().then(n => n && toast(`Connected to “${esc(n)}” — syncing`)).catch(e => toast(esc(e.message)));
   if (!Store.get('profile')) onboard();
   setInterval(tickCountdown, 1000);
   setInterval(() => { if (ui.tab === 'today') renderSoon(); }, 60000);

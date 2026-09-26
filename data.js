@@ -1,14 +1,5 @@
 /* Fixed reference lists. Everything Oscar-specific lives in the Store. */
 
-/* Google OAuth client ID. Leave blank and paste it in More → Sync instead;
-   either works, this just saves typing it on the second phone. */
-const GOOGLE_CLIENT_ID = '';
-
-/* Oscar's shared Drive folder. Pre-filled in Sync & sharing so neither phone
-   has to paste it. The ID is not a secret: a Restricted folder stays closed to
-   anyone who hasn't been shared on it. */
-const DEFAULT_FOLDER_LINK = 'https://drive.google.com/drive/folders/1UEXJg4yv9j1iSODTfAfketHOiC7kpvaz';
-
 /* One-tap log buttons on the Today screen. `potty` feeds the countdown;
    `trigger` is how many minutes after this event a puppy usually needs out. */
 const LOG_TYPES = [
