@@ -1,0 +1,17 @@
+{
+  "name": "Puppy Log — Oscar",
+  "short_name": "Oscar",
+  "description": "Potty timer, health records, training and a growing-up album, shared between two phones.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6efe6",
+  "theme_color": "#f6efe6",
+  "categories": ["lifestyle", "photo"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

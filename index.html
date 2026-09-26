@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Puppy Log</title>
+<meta name="description" content="Oscar's potty timer, health records, training and growing-up album — shared between two phones through Google Drive.">
+<meta name="theme-color" content="#f6efe6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1814" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main id="view"></main>
+
+<nav class="tabs" aria-label="Sections">
+  <button data-act="tab" data-tab="today"><span>🐾</span>Today</button>
+  <button data-act="tab" data-tab="health"><span>🩺</span>Health</button>
+  <button data-act="tab" data-tab="memories"><span>📸</span>Memories</button>
+  <button data-act="tab" data-tab="grow"><span>🎓</span>Grow</button>
+  <button data-act="tab" data-tab="more"><span>📁</span>More</button>
+</nav>
+
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-card" role="dialog" aria-modal="true">
+    <button class="close" id="sheet-close" aria-label="Close">✕</button>
+    <div id="sheet-body"></div>
+  </div>
+</div>
+<div id="viewer" class="viewer" hidden></div>
+<div id="toast" class="toast" hidden role="status"></div>
+
+<input type="file" id="in-photo" accept="image/*" capture="environment" hidden>
+<input type="file" id="in-video" accept="video/*" capture="environment" hidden>
+<input type="file" id="in-pick" accept="image/*,video/*" multiple hidden>
+<input type="file" id="in-doc" accept="image/*,application/pdf" hidden>
+
+<script src="data.js"></script>
+<script src="store.js"></script>
+<script src="drive.js"></script>
+<script src="media.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
