@@ -233,6 +233,9 @@ details summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 .v-nav { position: absolute; top: 45%; font-size: 40px; color: #fff; width: 48px; height: 64px; background: rgba(0,0,0,.25); border-radius: 12px; }
 .v-nav.prev { left: 6px; }
 .v-nav.next { right: 6px; }
+.v-play { display: flex; flex-direction: column; align-items: center; gap: 12px; background: rgba(0,0,0,.55); padding: 18px; border-radius: 16px; }
+.v-play .primary { text-decoration: none; }
+.v-play .link { color: #ddd; }
 .spin { color: #fff; background: rgba(0,0,0,.6); padding: 8px 14px; border-radius: 99px; font-size: 14px; }
 
 /* portrait camera */

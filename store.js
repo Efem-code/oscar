@@ -142,6 +142,10 @@ const Store = (() => {
   const blobGet = k => req(os('blobs').get(k));
   const blobPut = (k, b) => req(os('blobs', 'readwrite').put(b, k));
   const blobDel = k => req(os('blobs', 'readwrite').delete(k));
+  /* Drop every blob whose key starts with `prefix` (e.g. old full-size caches). */
+  async function blobClear(prefix) {
+    for (const k of await req(os('blobs').getAllKeys())) if (String(k).startsWith(prefix)) await req(os('blobs', 'readwrite').delete(k));
+  }
   const pendAll = () => req(os('pending').getAll());
   const pendAdd = p => req(os('pending', 'readwrite').put(p));
   const pendDel = id => req(os('pending', 'readwrite').delete(id));
@@ -149,7 +153,7 @@ const Store = (() => {
   return {
     open, onChange, put, remove, merge, get, list, everything, newId, who, refresh, raw,
     kvGet, kvSet, dirtyShards, cleanShard, ownShard, markAllDirty,
-    blobGet, blobPut, blobDel, pendAll, pendAdd, pendDel,
+    blobGet, blobPut, blobDel, blobClear, pendAll, pendAdd, pendDel,
     get dev() { return dev; },
     pref: get_, setPref: set_,
   };

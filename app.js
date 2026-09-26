@@ -828,6 +828,14 @@ async function viewer(id) {
     </div>
     ${i > 0 ? '<button class="v-nav prev" data-v="prev">‹</button>' : ''}${i >= 0 && i < list.length - 1 ? '<button class="v-nav next" data-v="next">›</button>' : ''}`;
   const stage = el.querySelector('.v-stage');
+  if (rec.video && rec.driveId && !(await Media.hasLocal(rec))) {
+    Media.thumbURL(rec).then(t => { if (t) stage.style.background = `center/contain no-repeat url("${t}")`; });
+    stage.innerHTML = `<div class="v-play"><a class="primary" href="${Drive.webLink(rec.driveId)}" target="_blank" rel="noopener">▶ Play in Google Drive</a>
+      <button class="link" data-v="here">or load it here (slower)</button></div>`;
+    stage.querySelector('[data-v=here]').onclick = e => { e.stopPropagation(); loadFull(); };
+  } else loadFull();
+  function loadFull() {
+  stage.innerHTML = '<div class="spin">Loading…</div>';
   Media.thumbURL(rec).then(t => { if (t && stage.querySelector('.spin')) stage.style.background = `center/contain no-repeat url("${t}")`; });
   const prog = f => { const sp = stage.querySelector('.spin'); if (sp) sp.textContent = `Loading${rec.video ? ' video' : ''}… ${Math.round(f * 100)}%`; };
   Media.fullURL(rec, prog).then(u => {
@@ -841,6 +849,7 @@ async function viewer(id) {
     stage.style.background = '';
     stage.innerHTML = rec.video ? `<video src="${u}" controls playsinline autoplay></video>` : `<img src="${u}" alt="">`;
   }).catch(e => { stage.innerHTML = `<p class="muted">${esc(e.message)}</p>`; });
+  }
   const saveCap = async () => { const c = $('#v-cap').value.trim(); if (c !== (rec.caption || '')) await Store.put({ id: rec.id, caption: c }); };
   el.onclick = async e => {
     const b = e.target.closest('[data-v]'); if (!b) return;
@@ -981,6 +990,7 @@ window.addEventListener('popstate', () => { if (!$('#sheet').hidden) closeSheet(
 
 (async () => {
   await Store.open();
+  Store.blobClear('c:').catch(() => {});   // full-size copies an earlier version kept on the phone
   Store.onChange(() => {
     renderSoon(); Drive.soon();
     // A photo opened before its full file finished uploading on the other phone: load it once it lands.

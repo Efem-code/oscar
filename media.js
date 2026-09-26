@@ -104,14 +104,19 @@ const Media = (() => {
     if (urls.has(key)) return urls.get(key);
     let b = rec.portrait ? await Store.blobGet('p:' + rec.id) : null;
     if (!b) { const p = (await Store.pendAll()).find(x => x.id === 'f:' + rec.id); b = p && p.blob; }
-    if (!b) b = await Store.blobGet('c:' + rec.id);           // fetched before — no second wait
+    /* Fetched copies live in memory for this session only — full files stay
+       in Drive so the app never fills up the phone. */
     if (!b && (rec.viewId || rec.driveId)) {
       b = rec.viewId ? await Drive.download(rec.viewId, onProgress, 'image/jpeg') : await Drive.download(rec.driveId, onProgress, rec.mime);
-      if (b.size < 80 * 1024 * 1024) Store.blobPut('c:' + rec.id, b).catch(() => {});
-      if (rec.portrait && !rec.video) await Store.blobPut('p:' + rec.id, b);
     }
     if (!b) return null;
     const u = URL.createObjectURL(b); urls.set(key, u); return u;
+  }
+
+  /* Is the full file already on this phone (taken here, still uploading, or a portrait)? */
+  async function hasLocal(rec) {
+    if (rec.portrait && await Store.blobGet('p:' + rec.id)) return true;
+    return (await Store.pendAll()).some(x => x.id === 'f:' + rec.id);
   }
 
   async function blobFor(rec) {
@@ -190,5 +195,5 @@ const Media = (() => {
     start();
   }
 
-  return { add, thumbURL, fullURL, blobFor, remove, hydrate, portraitCamera };
+  return { add, thumbURL, fullURL, blobFor, hasLocal, remove, hydrate, portraitCamera };
 })();
