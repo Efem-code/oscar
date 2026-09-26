@@ -323,3 +323,6 @@ details summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 }
 
 .lesson.done b { color: var(--muted); }
+
+.cam-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 11px; font-weight: 650; margin-bottom: 10px; box-shadow: var(--shadow); }
+.step ol { padding-left: 18px; margin: 6px 0; }

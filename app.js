@@ -362,6 +362,7 @@ VIEWS.today = () => {
     ${P().homeDay && daysUntil(P().homeDay) > 0 && !Store.list('log').length ? '' : countdownCard()}
     ${whoLine()}
     <section class="quick">${LOG_TYPES.map(t => `<button data-act="log" data-k="${t.k}" class="q-${t.k}"><span>${t.icon}</span>${t.label}</button>`).join('')}</section>
+    ${Store.pref('oscar.cam') !== 'off' ? `<button class="cam-btn" data-act="openCam">📹 Check on ${esc(App.pet())} <span class="muted small">${esc(camName())}</span></button>` : ''}
     <section class="capture">
       <button data-act="capture" data-k="photo">📷 Photo</button>
       <button data-act="capture" data-k="video">🎥 Video</button>
@@ -617,6 +618,7 @@ VIEWS.more = () => {
       <button class="item-main block" data-act="careSheet"><span class="ico">📋</span><span><b>Care sheet</b><small>One page for a sitter, groomer or new vet — print or share</small></span></button>
       <button class="item-main block" data-act="syncSettings"><span class="ico">☁️</span><span><b>Sync & sharing</b><small>${esc(syncLine())}</small></span></button>
       <button class="item-main block" data-act="backup"><span class="ico">💾</span><span><b>Backup</b><small>Save or restore everything as a file</small></span></button>
+      <button class="item-main block" data-act="camSettings"><span class="ico">📹</span><span><b>Pet camera button</b><small>${Store.pref('oscar.cam') === 'off' ? 'Hidden' : 'Opens ' + esc(camName()) + ' from Today'}</small></span></button>
       <button class="item-main block" data-act="notify"><span class="ico">🔔</span><span><b>Notifications</b><small>${Push.enabled() ? 'On — you’ll hear when new photos arrive' : 'Off — tap to get told about new photos'}</small></span></button>
       <button class="item-main block" data-act="me"><span class="ico">🙋</span><span><b>You: ${esc(Store.who())}</b><small>Name shown on what you log · alerts</small></span></button>
     </section>
@@ -1286,6 +1288,52 @@ ACT.wishDone = d => { const r = Store.get(d.id); return Store.put({ id: r.id, do
 ACT.wishCopy = async () => {
   const text = wishes().filter(w => !w.done).map(w => `- ${w.text} (${w.by || ''})`).join('\n');
   try { await navigator.clipboard.writeText(`Puppy Log ideas:\n${text}`); toast('Copied — paste it anywhere'); } catch { toast('Copy failed'); }
+};
+
+/* ---------- pet camera shortcut ---------- */
+/* A web app can't show another app inside it, so this is the next best thing:
+   one tap from Today into the camera's own app. Android opens it by package
+   name; iPhone can't open other apps by ID, so it runs a one-step Apple
+   Shortcut ("Open App → Furbo") that the user makes once. */
+const isIPhone = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const camName = () => Store.pref('oscar.camName') || 'Furbo';
+const camPkg = () => Store.pref('oscar.camPkg') || 'com.tomofun.furbo';
+const camShortcut = () => Store.pref('oscar.camShortcut') || 'Open Furbo';
+
+ACT.openCam = () => {
+  if (isIPhone()) {
+    if (!Store.pref('oscar.camShortcutReady')) return ACT.camSettings();
+    location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(camShortcut())}`;
+  } else {
+    const store = `https://play.google.com/store/apps/details?id=${camPkg()}`;
+    location.href = `intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${camPkg()};S.browser_fallback_url=${encodeURIComponent(store)};end`;
+  }
+};
+
+ACT.camSettings = () => {
+  const ios = isIPhone();
+  sheet(`<h2>📹 Pet camera button</h2>
+    <p class="muted">Adds a “Check on ${esc(App.pet())}” button on Today that jumps straight into your camera’s app. Its own alerts (barking etc.) keep coming as normal notifications.</p>
+    <div class="fld"><label>Camera app name</label><input id="cam-name" value="${esc(camName())}"></div>
+    ${ios ? `<div class="step ${Store.pref('oscar.camShortcutReady') ? 'ok' : ''}"><b>One-time iPhone setup</b>
+        <p class="small">iPhone doesn’t let web apps open other apps directly, so the button runs a tiny Shortcut:</p>
+        <ol class="small"><li>Open the <b>Shortcuts</b> app → <b>+</b></li><li>Add action → search <b>Open App</b> → choose <b>${esc(camName())}</b></li>
+        <li>Tap the name at the top → rename it exactly: <b>${esc(camShortcut())}</b> → Done</li></ol>
+        <div class="fld"><label>Shortcut name</label><input id="cam-sc" value="${esc(camShortcut())}"></div>
+        <p><button class="ghost" id="cam-test">Test it</button></p></div>`
+      : `<div class="fld"><label>Android app ID <small>Furbo is com.tomofun.furbo — change it for another brand</small></label><input id="cam-pkg" value="${esc(camPkg())}"></div>
+         <p><button class="ghost" id="cam-test">Test it</button></p>`}
+    <label class="tog"><input type="checkbox" id="cam-show" ${Store.pref('oscar.cam') !== 'off' ? 'checked' : ''}> Show the button on Today</label>
+    <div class="btns"><span class="grow"></span><button class="primary" id="cam-save">Save</button></div>`, r => {
+    const save = () => {
+      Store.setPref('oscar.camName', $('#cam-name', r).value.trim() || 'Furbo');
+      if ($('#cam-pkg', r)) Store.setPref('oscar.camPkg', $('#cam-pkg', r).value.trim() || 'com.tomofun.furbo');
+      if ($('#cam-sc', r)) { Store.setPref('oscar.camShortcut', $('#cam-sc', r).value.trim() || 'Open Furbo'); Store.setPref('oscar.camShortcutReady', '1'); }
+      Store.setPref('oscar.cam', $('#cam-show', r).checked ? 'on' : 'off');
+    };
+    $('#cam-test', r).onclick = () => { save(); ACT.openCam(); };
+    $('#cam-save', r).onclick = () => { save(); closeSheet(); render(); };
+  });
 };
 
 /* ---------- notifications ---------- */
