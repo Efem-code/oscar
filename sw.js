@@ -2,7 +2,7 @@
 /* BUILD is rewritten by deploy.sh on every deploy. It has to change or the
    browser sees an identical service worker, keeps the old one, and the update
    never reaches the phone. */
-const BUILD = '20260925-195444';
+const BUILD = '20260925-195711';
 const CACHE = 'oscar-' + BUILD;
 const SHELL = [
   './', './index.html', './styles.css', './data.js', './store.js', './drive.js', './media.js', './push.js', './app.js',
