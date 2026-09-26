@@ -884,7 +884,7 @@ ACT.syncSettings = async () => {
         <div class="inline"><input id="semail" type="email" placeholder="partner@gmail.com"><button class="pill" id="sshare">Share</button></div>
         <p class="small muted">Gives them edit access. They then pick “Join” on their phone.</p>`
       : signed ? `<p class="small muted">Paste the link to a Drive folder you made (Share → Copy link). You both need Editor access.</p>
-        <div class="inline"><input id="flink" placeholder="https://drive.google.com/drive/folders/…"><button class="pill" id="fuse">Use</button></div>
+        <div class="inline"><input id="flink" value="${esc(DEFAULT_FOLDER_LINK)}" placeholder="https://drive.google.com/drive/folders/…"><button class="pill" id="fuse">Use</button></div>
         <p class="small muted">Or let the app make one:</p>
         <p><button class="ghost" id="fnew">Create ${esc(App.pet())}’s folder</button> <button class="ghost" id="ffind">Find a shared one</button></p><div id="flist"></div>`
       : '<p class="muted small">Sign in first.</p>'}</div>
