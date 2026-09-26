@@ -1307,11 +1307,13 @@ ACT.openCam = () => {
     location.href = camScheme() + '://';
     setTimeout(() => { if (document.visibilityState === 'visible') ACT.camSettings(); }, 1800);
   } else {
-    /* Chrome only opens apps through a link they register (Furbo registers
-       furbo:), never an app's plain launcher — that's why the first version
-       fell through to the Play Store. */
-    const store = `https://play.google.com/store/apps/details?id=${camPkg()}`;
-    location.href = `intent://open#Intent;scheme=${camScheme()};package=${camPkg()};S.browser_fallback_url=${encodeURIComponent(store)};end`;
+    /* A plain furbo:// link opens the app. Chrome's intent:// form (with a
+       Play Store fallback) went straight to the store from the installed
+       app, even with Furbo installed — tested on the Fold. */
+    location.href = camScheme() + '://open';
+    setTimeout(() => {
+      if (document.visibilityState === 'visible') toast(`${esc(camName())} didn’t open — is it installed?`, [{ label: 'Get it', run: () => { location.href = `https://play.google.com/store/apps/details?id=${camPkg()}`; } }]);
+    }, 2500);
   }
 };
 const camScheme = () => Store.pref('oscar.camScheme') || 'furbo';
