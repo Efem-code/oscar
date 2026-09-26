@@ -75,8 +75,16 @@ async function healthReminder() {
     const p = n => String(n).padStart(2, '0'), key = d => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
     const today = key(new Date()), tomorrow = key(new Date(Date.now() + 864e5));
     const due = recs.filter(r => r.kind === 'health' && !r.deleted && !r.done && r.due && r.due <= tomorrow).sort((a, b) => a.due < b.due ? -1 : 1);
-    if (!due.length) return fallback;
     const pet = (recs.find(r => r.id === 'profile' && !r.deleted) || {}).name || 'Your puppy';
+    const lessons = recs.filter(r => r.kind === 'lesson' && !r.deleted && !r.done && (r.due === today || r.due === tomorrow));
+    if (lessons.length) {
+      const l = lessons.sort((a, b) => a.due < b.due ? -1 : 1)[0], c = recs.find(r => r.id === l.classId) || {};
+      const t = l.time || c.time, clock = t ? new Date(`2000-01-01T${t}`).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+      const more = due.length ? `\nAlso: ${due.length} health item${due.length > 1 ? 's' : ''} due` : '';
+      return { title: `🎓 ${c.name || 'Training class'} ${l.due === today ? 'today' : 'tomorrow'}${clock ? ' at ' + clock : ''}`,
+        body: [c.place, c.trainer && 'with ' + c.trainer, c.bring && 'Bring: ' + c.bring].filter(Boolean).join(' · ') + more, tag: 'class', url: './#grow' };
+    }
+    if (!due.length) return fallback;
     const when = r => r.due < today ? 'overdue' : r.due === today ? 'today' : 'tomorrow';
     return { title: `💉 ${pet}: ${due.length === 1 ? due[0].name + ' due ' + when(due[0]) : due.length + ' health items due'}`,
       body: due.slice(0, 4).map(r => `${r.name} — ${when(r)}`).join('\n'), tag: 'health', url: './#health' };

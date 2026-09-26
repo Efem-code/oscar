@@ -378,7 +378,7 @@ VIEWS.today = () => {
       </div>
       <div class="timeline">${sum.logs.length ? sum.logs.map(timelineRow).join('') : '<p class="muted pad">Nothing logged yet.</p>'}</div>
     </section>
-    ${due.length ? `<section class="card"><h3>Coming up</h3>${due.map(healthRow).join('')}</section>` : ''}
+    ${due.length || nextLessons(7).length ? `<section class="card"><h3>Coming up</h3>${nextLessons(7).map(lessonRow).join('')}${due.map(healthRow).join('')}</section>` : ''}
     ${shopItems().some(x => !x.done) ? `<button class="card chipcard" data-act="shop">🛒 <b>${shopItems().filter(x => !x.done).length} on the shopping list</b> <span class="muted">${esc(shopItems().filter(x => !x.done).slice(0, 3).map(x => x.text).join(', '))}</span></button>` : ''}
     </div></div>`;
 };
@@ -450,6 +450,7 @@ VIEWS.grow = () => {
   const wksLeft = d == null ? null : Math.ceil((16 * 7 - d) / 7);
   return `${header('Training & growing up')}
     <div class="cols"><div>
+    ${classesCard()}
     ${breedNotes() ? `<section class="card breed"><details><summary><b>🐕 About ${esc(P().breed)}s</b> <span class="muted small">tendencies, not rules</span></summary>
       <ul>${breedNotes().tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details></section>` : ''}
     <section class="card"><div class="h-row"><h3>Training</h3><button class="pill" data-act="addSkill">+ Skill</button></div>
@@ -961,6 +962,99 @@ ACT.syncSettings = () => {
   });
 };
 
+/* ---------- training classes ---------- */
+/* A course (trainer, place, day and time, how many weeks) plus one `lesson`
+   record per session, so each can be ticked off with homework notes and the
+   8 am reminder can mention class days. */
+const CLASS_TYPES = ['Puppy kindergarten', 'Basic obedience', 'Leash manners', 'Recall', 'Reactive / confidence', 'Private lesson', 'Day training', 'Agility'];
+const fmtClock = t => { if (!t) return ''; const [h, m] = t.split(':').map(Number); const d = new Date(); d.setHours(h, m); return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
+const nextLessons = days => Store.list('lesson', l => !l.done && l.due && daysUntil(l.due) >= 0 && daysUntil(l.due) <= days).sort((a, b) => (a.due + (a.time || '')) < (b.due + (b.time || '')) ? -1 : 1);
+const mapLink = c => `https://maps.google.com/?q=${encodeURIComponent(c.address || c.place || '')}`;
+
+function lessonRow(l) {
+  const c = Store.get(l.classId) || {};
+  const n = daysUntil(l.due);
+  return `<div class="item ${n <= 1 ? 'soon' : ''}"><button class="item-main" data-act="showClass" data-id="${l.classId}">
+    <span class="ico">🎓</span><span><b>${esc(c.name || 'Class')}${l.num ? ` · week ${l.num}` : ''}</b>
+    <small>${n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : fmtDay(l.due)}${l.time || c.time ? ' · ' + fmtClock(l.time || c.time) : ''}${c.place ? ' · ' + esc(c.place) : ''}${c.trainer ? ' · ' + esc(c.trainer) : ''}</small></span></button></div>`;
+}
+
+function classesCard() {
+  const cls = Store.list('class');
+  const active = cls.filter(c => Store.list('lesson', l => l.classId === c.id && !l.done && daysUntil(l.due) >= 0).length);
+  const past = cls.filter(c => !active.includes(c));
+  const line = c => {
+    const ls = Store.list('lesson', l => l.classId === c.id);
+    const next = ls.filter(l => !l.done && daysUntil(l.due) >= 0).sort((a, b) => a.due < b.due ? -1 : 1)[0];
+    const done = ls.filter(l => l.done).length;
+    return `<button class="item-main block" data-act="showClass" data-id="${c.id}"><span class="ico">🏫</span><span><b>${esc(c.name)}</b>
+      <small>${next ? `Next: ${fmtDay(next.due)}${c.time ? ' ' + fmtClock(c.time) : ''}` : 'Finished'}${c.place ? ' · ' + esc(c.place) : ''}${c.trainer ? ' · ' + esc(c.trainer) : ''}${ls.length > 1 ? ` · ${done}/${ls.length} done` : ''}</small></span></button>`;
+  };
+  return `<section class="card"><div class="h-row"><h3>🏫 Classes</h3><button class="pill" data-act="classForm">+ Class</button></div>
+    ${active.map(line).join('') || '<p class="muted">Signed up for puppy class or a trainer? Add it — the day, time, place and trainer show up on Today and in the morning reminder.</p>'}
+    ${past.length ? `<details><summary>Past classes (${past.length})</summary>${past.map(line).join('')}</details>` : ''}</section>`;
+}
+
+const classFields = [
+  { k: 'name', label: 'Class', type: 'suggest', options: CLASS_TYPES, required: true },
+  { type: 'row', fields: [{ k: 'trainer', label: 'Trainer' }, { k: 'phone', label: 'Trainer’s phone', type: 'tel' }] },
+  { k: 'place', label: 'Where', ph: 'e.g. Happy Paws Training Centre' },
+  { k: 'address', label: 'Address', ph: 'for directions' },
+  { type: 'row', fields: [{ k: 'start', label: 'First class', type: 'date', required: true }, { k: 'time', label: 'Time', type: 'time' }] },
+  { type: 'row', fields: [{ k: 'weeks', label: 'How many sessions', type: 'number', def: 6 }, { k: 'cost', label: 'Cost ($)', type: 'number' }] },
+  { k: 'bring', label: 'What to bring', ph: 'treats, mat, flat collar, vaccine record…' },
+  { k: 'notes', label: 'Notes', type: 'textarea', rows: 2 },
+];
+
+/* (Re)build the sessions: keeps attended ones and their notes, replaces the rest. */
+async function scheduleLessons(c) {
+  const old = Store.list('lesson', l => l.classId === c.id);
+  const keep = new Map(old.filter(l => l.done || l.note).map(l => [l.num, l]));
+  for (const l of old) if (!keep.has(l.num)) await Store.remove(l.id);
+  const n = Math.max(1, Math.min(52, Number(c.weeks) || 1));
+  for (let i = 1; i <= n; i++) {
+    const due = addUnit(c.start, 7 * (i - 1), 'days');
+    const k = keep.get(i);
+    if (k) { if (k.due !== due) await Store.put({ id: k.id, due }); }
+    else await Store.put({ kind: 'lesson', classId: c.id, num: n > 1 ? i : 0, due, time: c.time || '' });
+  }
+  for (const [num, l] of keep) if (num > n) await Store.remove(l.id);
+}
+
+ACT.classForm = d => {
+  const r = d.id ? Store.get(d.id) : null;
+  form({ title: '🏫 Training class', fields: classFields, value: r || { weeks: 6 },
+    onSave: async v => {
+      const c = await Store.put(r ? { id: r.id, ...v } : { kind: 'class', ...v });
+      await scheduleLessons(c);
+      // Keep the trainer in Contacts too.
+      if (v.trainer && v.phone && !Store.list('contact', x => x.phone === v.phone).length) await Store.put({ kind: 'contact', role: 'Trainer', name: v.trainer, phone: v.phone, address: v.address, notes: v.place });
+      setTimeout(() => ACT.showClass({ id: c.id }), 50);
+    },
+    onDelete: r ? async () => { for (const l of Store.list('lesson', l => l.classId === r.id)) await Store.remove(l.id); await Store.remove(r.id); } : null });
+};
+
+ACT.showClass = d => {
+  const c = Store.get(d.id); if (!c) return;
+  const ls = Store.list('lesson', l => l.classId === c.id).sort((a, b) => a.due < b.due ? -1 : 1);
+  sheet(`<h2>🏫 ${esc(c.name)}</h2>
+    <dl class="kv">${kv('Trainer', c.trainer)}${c.phone ? `<dt>Phone</dt><dd><a href="tel:${esc(c.phone)}">${esc(c.phone)}</a></dd>` : ''}
+      ${kv('Where', c.place)}${c.address || c.place ? `<dt>Directions</dt><dd><a href="${mapLink(c)}" target="_blank" rel="noopener">${esc(c.address || 'Open in Maps')}</a></dd>` : ''}
+      ${kv('When', `${parseDay(c.start).toLocaleDateString([], { weekday: 'long' })}s${c.time ? ' at ' + fmtClock(c.time) : ''}`)}${kv('Cost', c.cost ? money(c.cost) : '')}${kv('Bring', c.bring)}${kv('Notes', c.notes)}</dl>
+    <h4>Sessions</h4>
+    ${ls.map(l => `<div class="item lesson ${l.done ? 'done' : ''}"><button class="tick" data-l="${l.id}">${l.done ? '✅' : '⬜'}</button>
+      <span class="item-main"><span><b>${l.num ? 'Week ' + l.num + ' · ' : ''}${fmtDay(l.due)}</b><small>${l.note ? esc(l.note) : daysUntil(l.due) < 0 && !l.done ? 'missed?' : ''}</small></span></span>
+      <button class="pill" data-n="${l.id}">📝</button></div>`).join('')}
+    <div class="btns"><span class="grow"></span><button class="primary" data-act="classForm" data-id="${c.id}">Edit</button></div>`, r => {
+    r.querySelectorAll('[data-l]').forEach(b => b.onclick = async () => { const l = Store.get(b.dataset.l); await Store.put({ id: l.id, done: !l.done }); ACT.showClass(d); });
+    r.querySelectorAll('[data-n]').forEach(b => b.onclick = () => {
+      const l = Store.get(b.dataset.n);
+      form({ title: `📝 ${c.name}${l.num ? ' · week ' + l.num : ''}`, value: l, fields: [{ k: 'note', label: 'What we learned / homework', type: 'textarea', rows: 5 }],
+        onSave: async v => { await Store.put({ id: l.id, note: v.note }); setTimeout(() => ACT.showClass(d), 50); } });
+    });
+  });
+};
+
 /* ---------- getting ready ---------- */
 ACT.prep = () => {
   const { groups, done, total } = prepItems();
@@ -1009,6 +1103,7 @@ ACT.shop = () => {
 function spendRows() {
   const rows = Store.list('expense').map(e => ({ at: e.at, amount: Number(e.amount) || 0, cat: e.cat || 'Other', note: e.note, id: e.id }));
   Store.list('vet', v => v.cost).forEach(v => rows.push({ at: v.at, amount: Number(v.cost), cat: 'Vet', note: v.reason, vet: v.id }));
+  Store.list('class', c => c.cost).forEach(c => rows.push({ at: new Date(parseDay(c.start || localDay(c.at)).getTime() + 12 * 36e5).toISOString(), amount: Number(c.cost), cat: 'Training', note: c.name, cls: c.id }));
   Store.list('claim', c => c.reimbursed).forEach(c => rows.push({ at: c.at, amount: -Number(c.reimbursed), cat: 'Insurance back', note: c.desc, claim: c.id }));
   return rows.sort((a, b) => a.at < b.at ? 1 : -1);
 }
@@ -1033,7 +1128,7 @@ ACT.spend = () => {
   for (const r of rows) { const m = localDay(r.at).slice(0, 7); (months[m] = months[m] || { total: 0, cats: {}, rows: [] }); months[m].total += r.amount; months[m].cats[r.cat] = (months[m].cats[r.cat] || 0) + r.amount; months[m].rows.push(r); }
   sheet(`<h2>💰 Spending</h2>${Object.entries(months).map(([m, x]) => `<details ${m === todayKey().slice(0, 7) ? 'open' : ''}><summary><b>${parseDay(m + '-01').toLocaleDateString([], { month: 'long', year: 'numeric' })}</b> · ${money(x.total)}</summary>
     <div class="chips small">${Object.entries(x.cats).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<span class="chip">${esc(c)} ${money(v)}</span>`).join('')}</div>
-    ${x.rows.map(r => `<button class="item-main block" ${r.id ? `data-act="expense" data-id="${r.id}"` : r.vet ? `data-act="showVet" data-id="${r.vet}"` : `data-act="claim" data-id="${r.claim}"`}><span><b>${money(r.amount)} · ${esc(r.cat)}</b><small>${fmtDay(localDay(r.at))}${r.note ? ' · ' + esc(r.note) : ''}</small></span></button>`).join('')}</details>`).join('') || '<p class="muted">Nothing yet.</p>'}`);
+    ${x.rows.map(r => `<button class="item-main block" ${r.id ? `data-act="expense" data-id="${r.id}"` : r.cls ? `data-act="showClass" data-id="${r.cls}"` : r.vet ? `data-act="showVet" data-id="${r.vet}"` : `data-act="claim" data-id="${r.claim}"`}><span><b>${money(r.amount)} · ${esc(r.cat)}</b><small>${fmtDay(localDay(r.at))}${r.note ? ' · ' + esc(r.note) : ''}</small></span></button>`).join('')}</details>`).join('') || '<p class="muted">Nothing yet.</p>'}`);
 };
 
 /* ---------- past-due health items ---------- */

@@ -321,3 +321,5 @@ details summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
   body.print-book .pages { padding: 0; gap: 0; display: block; }
   body.print-book .page { width: 8.5in; height: 8.5in; box-shadow: none; page-break-after: always; break-after: page; }
 }
+
+.lesson.done b { color: var(--muted); }

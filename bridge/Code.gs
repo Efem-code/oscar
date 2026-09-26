@@ -172,7 +172,7 @@ function dailyReminders(dry) {
   const recs = loadRecs_(), tz = Session.getScriptTimeZone();
   const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
   const tomorrow = Utilities.formatDate(new Date(Date.now() + 864e5), tz, 'yyyy-MM-dd');
-  const due = Object.keys(recs).map(k => recs[k]).filter(r => r.kind === 'health' && !r.deleted && !r.done && r.due && r.due <= tomorrow);
+  const due = Object.keys(recs).map(k => recs[k]).filter(r => !r.deleted && !r.done && r.due && ((r.kind === 'health' && r.due <= tomorrow) || (r.kind === 'lesson' && (r.due === today || r.due === tomorrow))));
   if (!due.length) return 'nothing due';
   const v = recs.vapid, tok = recs.pushjwt;
   if (!v || !tok || tok.pub !== v.pub) return 'no push tokens yet';
