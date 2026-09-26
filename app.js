@@ -1302,13 +1302,19 @@ const camShortcut = () => Store.pref('oscar.camShortcut') || 'Open Furbo';
 
 ACT.openCam = () => {
   if (isIPhone()) {
-    if (!Store.pref('oscar.camShortcutReady')) return ACT.camSettings();
-    location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(camShortcut())}`;
+    if (Store.pref('oscar.camShortcutReady')) { location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(camShortcut())}`; return; }
+    // Try the app's own link first; if nothing opened after a moment, show the Shortcut setup.
+    location.href = camScheme() + '://';
+    setTimeout(() => { if (document.visibilityState === 'visible') ACT.camSettings(); }, 1800);
   } else {
+    /* Chrome only opens apps through a link they register (Furbo registers
+       furbo:), never an app's plain launcher — that's why the first version
+       fell through to the Play Store. */
     const store = `https://play.google.com/store/apps/details?id=${camPkg()}`;
-    location.href = `intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${camPkg()};S.browser_fallback_url=${encodeURIComponent(store)};end`;
+    location.href = `intent://open#Intent;scheme=${camScheme()};package=${camPkg()};S.browser_fallback_url=${encodeURIComponent(store)};end`;
   }
 };
+const camScheme = () => Store.pref('oscar.camScheme') || 'furbo';
 
 ACT.camSettings = () => {
   const ios = isIPhone();
@@ -1322,12 +1328,14 @@ ACT.camSettings = () => {
         <div class="fld"><label>Shortcut name</label><input id="cam-sc" value="${esc(camShortcut())}"></div>
         <p><button class="ghost" id="cam-test">Test it</button></p></div>`
       : `<div class="fld"><label>Android app ID <small>Furbo is com.tomofun.furbo — change it for another brand</small></label><input id="cam-pkg" value="${esc(camPkg())}"></div>
+         <div class="fld"><label>App link <small>Furbo’s is furbo</small></label><input id="cam-scheme" value="${esc(camScheme())}"></div>
          <p><button class="ghost" id="cam-test">Test it</button></p>`}
     <label class="tog"><input type="checkbox" id="cam-show" ${Store.pref('oscar.cam') !== 'off' ? 'checked' : ''}> Show the button on Today</label>
     <div class="btns"><span class="grow"></span><button class="primary" id="cam-save">Save</button></div>`, r => {
     const save = () => {
       Store.setPref('oscar.camName', $('#cam-name', r).value.trim() || 'Furbo');
       if ($('#cam-pkg', r)) Store.setPref('oscar.camPkg', $('#cam-pkg', r).value.trim() || 'com.tomofun.furbo');
+      if ($('#cam-scheme', r)) Store.setPref('oscar.camScheme', $('#cam-scheme', r).value.trim().replace(/:.*$/, '') || 'furbo');
       if ($('#cam-sc', r)) { Store.setPref('oscar.camShortcut', $('#cam-sc', r).value.trim() || 'Open Furbo'); Store.setPref('oscar.camShortcutReady', '1'); }
       Store.setPref('oscar.cam', $('#cam-show', r).checked ? 'on' : 'off');
     };
