@@ -216,7 +216,7 @@ function morningMessage_(recs) {
       body: [a.clinic, a.vet && 'with ' + a.vet, a.bring && 'Bring/ask: ' + a.bring].filter(Boolean).join(' · ') + also, tag: 'appt', url: './#health' }; }
   if (lessons.length) { const l = lessons[0], c = recs[l.classId] || {};
     return { title: '🎓 ' + (c.name || 'Training class') + ' ' + when(l.due) + ((l.time || c.time) ? ' at ' + clock_(l.time || c.time) : ''),
-      body: [c.place, c.trainer && 'with ' + c.trainer, c.bring && 'Bring: ' + c.bring].filter(Boolean).join(' · ') + also, tag: 'class', url: './#grow' }; }
+      body: [c.place, c.trainer && 'with ' + c.trainer, c.bring && 'Bring: ' + c.bring].filter(Boolean).join(' · ') + also, tag: 'class', url: './#train' }; }
   if (due.length) return { title: '💉 ' + pet + ': ' + (due.length === 1 ? due[0].name + ' due ' + when(due[0].due) : due.length + ' health items due'),
     body: due.slice(0, 4).map(r => r.name + ' — ' + when(r.due)).join('\n'), tag: 'health', url: './#health' };
   return null;

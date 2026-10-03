@@ -345,3 +345,22 @@ details summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 .trend small { width: 74px; text-align: right; color: var(--muted); }
 .trend small.up { color: var(--good); }
 .trend small.down { color: var(--bad); }
+
+/* Train tab */
+.pp-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.pp-grid div { background: var(--soft); border-radius: 12px; padding: 8px; text-align: center; }
+.pp-grid b { display: block; font-size: 17px; }
+.pp-grid small { color: var(--muted); font-size: 11.5px; }
+.goal { margin: 4px 0 8px; }
+.goal-bar { height: 8px; background: var(--soft); border-radius: 99px; overflow: hidden; }
+.goal-bar i { display: block; height: 100%; background: var(--good); }
+.goal small { color: var(--muted); }
+.games { display: grid; grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); gap: 8px; }
+.game { background: var(--soft); border-radius: 12px; padding: 10px 6px; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; min-width: 0; }
+.game span { font-size: 24px; }
+.game b { font-size: 12.5px; }
+.game small { color: var(--muted); font-size: 11px; }
+ol.steps { padding-left: 20px; }
+ol.steps li { margin-bottom: 6px; }
+.banner.jindo { cursor: default; }
+.tabs button { font-size: 11px; }

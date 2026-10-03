@@ -1,0 +1,173 @@
+/* Training guides and brain games for the Train tab.
+
+   Reward-based methods throughout: Jindos are sensitive and independent, and
+   harsh corrections tend to cost trust rather than teach. Each guide links to
+   a skill in the progress tracker (`skill`) so a practice session can be
+   logged straight from it. */
+
+const TRAINING_BASICS = [
+  'Pick one marker word — “Yes!” — and say it the instant he does the right thing, then treat. The marker is what tells him which moment earned it.',
+  'Keep sessions short: 3–5 minutes, two or three times a day. Stop while he’s still keen.',
+  'Use treats he’ll work for — small, soft and smelly (chicken, cheese, salmon bits). Part of a meal works for easy stuff; save the best for recall and hard places.',
+  'Jindos bore quickly with drilling. Do 3–5 reps, then switch to something else or play.',
+  'Make it easy first, then add one difficulty at a time: distance, duration or distractions — never all three at once.',
+  'End on a win. If he’s struggling, step back to an easier version and finish there.',
+  'No yelling, leash pops or forcing. With a Jindo it tends to make him avoid you rather than listen.',
+];
+
+const GUIDES = [
+  {
+    id: 'recall', icon: '📣', title: 'Recall (come)', skill: 'Come (recall)', when: 'The most important one — start today',
+    why: 'Jindos have strong prey drive and an independent streak, so a recall has to be practised until it’s a habit, and always made worth coming back for.',
+    steps: [
+      'Choose a fresh cue word if “come” has been used to call him for things he dislikes (bath, nails). “Here!” or a whistle works.',
+      'Indoors, 1–2 metres away: say his name + cue once, back away a step, “Yes!” when he reaches you, and give a jackpot (3–5 treats one after another).',
+      'When he arrives, gently touch his collar before treating — so being caught is part of the reward, not the end of fun.',
+      'Ping-pong recall: two of you in different rooms take turns calling him. Great game, lots of reps.',
+      'Move outside on a 10–15 m long line in a quiet spot. Call when he’s mildly distracted, not mid-chase.',
+      'Run away from him as you call — Jindos love a chase. Never chase him; it teaches the opposite game.',
+      'Pick an “emergency” word used only for big moments, always paid with the best food he gets all week.',
+    ],
+    jindo: 'Many Jindos never become reliable off-leash around wildlife. Use the long line in unfenced areas, and let him off only in secure fenced spaces until you’ve proven it many times over.',
+    mistakes: ['Calling him to end the fun (leaving the park) every time — call, reward, let him go back to playing.', 'Repeating the cue — say it once; if he doesn’t come, make it easier next time.', 'Telling him off when he finally arrives.'],
+  },
+  {
+    id: 'leash', icon: '🦮', title: 'Loose-leash walking', skill: 'Loose leash', when: 'Every walk, a few minutes at a time',
+    why: 'Pulling gets rewarded every time it works. The rule to teach: a slack leash makes the walk move.',
+    steps: [
+      'Start indoors or in the yard. Reward him often for being next to your leg — every few steps at first.',
+      'If the leash goes tight, stop and stand still. The moment it slackens, “Yes!” and move on.',
+      'If he keeps pulling, turn and walk the other way; reward when he catches up beside you.',
+      'Use “Go sniff!” as a reward: a loose leash earns a sniff break. Sniffing is a Jindo’s favourite currency.',
+      'Practise in boring places first, then busier ones.',
+    ],
+    jindo: 'A snug harness with a front clip helps a strong puller. Make sure it’s escape-proof — Jindos are known for backing out of collars.',
+    mistakes: ['Letting him pull sometimes — it makes pulling a lottery he’ll keep playing.', 'Walks that are only training — mix in “sniffari” walks where he leads at a slow pace.'],
+  },
+  {
+    id: 'leave', icon: '🚫', title: 'Leave it', skill: 'Leave it (small animals)', when: 'Builds self-control for squirrels and dropped food',
+    why: 'Teaches him that ignoring something gets him something better from you.',
+    steps: [
+      'Hold a treat in a closed fist. Let him sniff and lick. The second he backs off, “Yes!” and treat from your OTHER hand.',
+      'Repeat until he backs off right away, then add “Leave it” just before you present the fist.',
+      'Progress: open palm (close it if he goes for it), then treat on the floor under your foot, then uncovered.',
+      'Walk past a treat on the floor on leash; reward for looking at you.',
+      'Later: practise at a distance from things he really wants — a toy on a string, then real squirrels far away.',
+    ],
+    jindo: 'With a high prey drive, use real distance at first. If he’s staring and frozen, he’s too close to learn — move away and try again.',
+    mistakes: ['Giving him the item he left — the reward always comes from you.'],
+  },
+  {
+    id: 'settle', icon: '🧘', title: 'Settle on a mat', skill: 'Settle', when: 'Great before meals or with visitors over',
+    why: 'Teaches an “off switch” — a place where calm is rewarded. Useful at cafés, the vet and when people visit.',
+    steps: [
+      'Put a mat or towel down. Reward any paw on it, then all four, then lying down.',
+      'Once he lies on it, drop treats calmly between his paws every few seconds while he stays relaxed.',
+      'Slowly stretch the time between treats. Release with “Free!” before he gets up on his own.',
+      'Add a Kong or lick mat on the mat for longer settles.',
+      'Take the mat on outings so it becomes a portable calm spot.',
+    ],
+    jindo: 'Jindos often settle well once they understand it — this is a good one for him to feel secure in new places.',
+    mistakes: ['Only using the mat when you’re busy — practise when you can reward calm.'],
+  },
+  {
+    id: 'strangers', icon: '🙋', title: 'Calm around strangers', skill: 'Calm around strangers', when: 'Ongoing — tiny doses',
+    why: 'Jindos are often reserved with people they don’t know. The goal isn’t that he loves everyone — it’s that strangers mean nothing scary.',
+    steps: [
+      '“Look at that”: when he notices a person at a comfortable distance, “Yes!” and treat. People appearing = treats.',
+      'Ask visitors to ignore him at first — no eye contact, no reaching. Let them toss treats past him.',
+      'Let him choose to approach and sniff; a calm greeting is the reward, not petting.',
+      'If someone wants to pet him: one short chin scratch, then they stop and see if he asks for more.',
+      'Watch for “I’m uncomfortable” signs — lip licking, turning away, yawning, stiff body — and add distance.',
+    ],
+    jindo: 'Never force him to be handled by strangers. Forced greetings tend to make reserved dogs more wary, not less.',
+    mistakes: ['Holding him still for people to pet.', 'Going too close too fast because he seemed fine last time.'],
+  },
+  {
+    id: 'door', icon: '🚪', title: 'Wait at the door (no bolting)', skill: 'Door wait (no bolting)', when: 'At every door, every day',
+    why: 'An escape-artist breed plus an open door is a risk. Waiting until released should become automatic.',
+    steps: [
+      'With him on leash, reach for the handle. If he stays put, “Yes!” and treat.',
+      'Open the door an inch. If he moves toward it, close it gently. If he waits, treat.',
+      'Gradually open wider and longer, then add your cue: “Wait”, and a release: “OK, let’s go”.',
+      'Practise at the front door, car door and crate door.',
+      'Add family members and visitors once he’s solid.',
+    ],
+    jindo: 'Keep a leash on near open front doors until this is rock solid — it only takes one escape.',
+    mistakes: ['Only practising when you’re in a rush.'],
+  },
+  {
+    id: 'handling', icon: '✂️', title: 'Handling & nail trims', skill: 'Handling & nail trims', when: 'A minute a day',
+    why: 'Many Jindos dislike being handled. Make vet checks, brushing and nails something he agrees to.',
+    steps: [
+      'Touch a paw for one second → treat. Ears → treat. Mouth → treat. Stop before he pulls away.',
+      'Teach a “chin rest” on your hand: while his chin is down, you can touch; if he lifts it, you stop. He gets a say.',
+      'Show the clippers → treat. Touch them to a nail → treat. Clip ONE nail → jackpot. That can be the whole session.',
+      'Brush in short strokes with treats in between; his double coat sheds heavily in spring and fall.',
+    ],
+    jindo: 'Going slower than you think you need to is usually faster in the end. A scratch board (nail file board) is an easy alternative to clippers.',
+    mistakes: ['Holding him down to “just get it done” — it makes the next time harder.'],
+  },
+  {
+    id: 'drop', icon: '🧸', title: 'Drop it (trade)', skill: 'Drop it', when: 'During play',
+    why: 'Swapping instead of chasing means he won’t learn to run off with things.',
+    steps: [
+      'While playing tug, go still and hold a treat at his nose. When he lets go, “Drop” → “Yes!” → treat → restart the game.',
+      'Restarting the game is the big reward — dropping doesn’t end the fun.',
+      'Practise with low-value items before anything he really treasures.',
+    ],
+    jindo: 'If he grabs something he shouldn’t have, trade calmly rather than chasing — Jindos can learn to guard things that get taken away.',
+    mistakes: ['Chasing him to get things back.'],
+  },
+  {
+    id: 'focus', icon: '👀', title: 'Name & focus (“watch me”)', skill: 'Name', when: 'Foundation for everything else',
+    why: 'If he looks at you when you say his name, every other skill gets easier.',
+    steps: [
+      'Say his name once in a happy voice; the instant he looks at you, “Yes!” and treat.',
+      'Hold a treat at your eyes, then move it away to the side — reward when he looks at your face, not the food.',
+      'Practise in new places with low distraction before busy ones.',
+    ],
+    jindo: 'Pay generously for eye contact in exciting places — it’s the habit that helps most with prey drive later.',
+    mistakes: ['Repeating his name over and over until it means nothing.'],
+  },
+];
+
+/* Brain games: short, cheap, and most can use part of a meal. */
+const GAMES = [
+  { id: 'scatter', icon: '🌿', title: 'Scatter feeding', time: '5–10 min', level: 1, need: 'Part of his meal, grass or a towel',
+    how: 'Throw a handful of kibble into grass or onto a towel and let him sniff it out. Sniffing tires dogs out more than you’d think.' },
+  { id: 'towel', icon: '🌀', title: 'Towel roll', time: '2–5 min', level: 1, need: 'An old towel, treats',
+    how: 'Lay a towel flat, sprinkle treats, roll it up loosely. He unrolls it with his nose and paws. Fold it over too for a harder version.' },
+  { id: 'muffin', icon: '🧁', title: 'Muffin tin puzzle', time: '5 min', level: 1, need: 'Muffin tin, tennis balls, treats',
+    how: 'Put treats in a few cups of a muffin tin and cover every cup with a ball. He has to move the balls to find the treats.' },
+  { id: 'boxes', icon: '📦', title: 'Box shred', time: '5–10 min', level: 1, need: 'Cardboard boxes, toilet-roll tubes',
+    how: 'Hide treats inside tubes with folded ends, put them in a box, close it loosely. Supervise and pick up any pieces he tries to swallow.' },
+  { id: 'shell', icon: '🥤', title: 'Shell game', time: '5 min', level: 2, need: '3 plastic cups, smelly treat',
+    how: 'Let him watch you put a treat under one cup. Shuffle slowly. Reward when he nudges the right one. Start with one cup.' },
+  { id: 'findit', icon: '👃', title: '“Find it” scent work', time: '5–10 min', level: 2, need: 'Treats',
+    how: 'Say “Find it!” and drop a treat at your feet. Then toss it a little away, then hide it behind a chair while he watches, then while he waits in another room. Great rainy-day game.' },
+  { id: 'hide', icon: '🙈', title: 'Hide and seek', time: '5–10 min', level: 2, need: 'Two people',
+    how: 'One person holds him, the other hides and calls once. Big party when he finds you. Doubles as recall practice.' },
+  { id: 'kong', icon: '🧊', title: 'Frozen Kong', time: '20–40 min', level: 1, need: 'Kong or similar, his kibble',
+    how: 'Soak kibble in water, pack it into a Kong, freeze overnight. Plain pumpkin or plain yogurt can seal it — only xylitol-free peanut butter, if any.' },
+  { id: 'lick', icon: '👅', title: 'Lick mat', time: '10–15 min', level: 1, need: 'Lick mat',
+    how: 'Spread plain yogurt, pumpkin or wet food thinly and freeze for longer. Licking is calming — good before a nail trim or when you leave the house.' },
+  { id: 'flirt', icon: '🎣', title: 'Flirt pole', time: '5 min', level: 2, need: 'Flirt pole (rope toy on a stick)',
+    how: 'Drag the toy in circles on the ground for him to chase, let him catch it often, then “Drop” and restart. An outlet for prey drive with rules. Keep it short — easy on growing joints.' },
+  { id: 'trick', icon: '🎩', title: 'Learn a trick', time: '3–5 min', level: 2, need: 'Treats',
+    how: 'Spin (lure him in a circle), touch (nose to your palm), paw, bow. New tricks are great brain work and fun to show off.' },
+  { id: 'sniffari', icon: '🗺️', title: 'Sniff walk', time: '20–30 min', level: 1, need: 'Long line or long leash',
+    how: 'A slow walk where he chooses the route and sniffs as long as he likes. Calming, and very Jindo.' },
+  { id: 'obstacles', icon: '🪵', title: 'Mini obstacle course', time: '10 min', level: 2, need: 'Logs, a low step, a cushion',
+    how: 'Lure him over low logs, onto a step, through a play tunnel or under a chair. Builds body awareness and confidence on new surfaces.' },
+  { id: 'puzzle', icon: '🧩', title: 'Puzzle toy', time: '10 min', level: 2, need: 'Store-bought puzzle (e.g. Nina Ottosson level 1–2, Kong Wobbler)',
+    how: 'Start on the easiest level and help him the first few times so he doesn’t give up. Swap toys every few days to keep them new.' },
+];
+
+const DAILY_SHAPE = [
+  'Morning: potty, sniff walk, then breakfast from a puzzle or scatter.',
+  'Two or three 5-minute training sessions spread through the day.',
+  'One brain game in the afternoon.',
+  'Evening walk with some loose-leash practice, then dinner.',
+  'Lots of naps — young dogs need around 14 hours of sleep. A tired-but-cranky puppy usually needs sleep, not more exercise.',
+];

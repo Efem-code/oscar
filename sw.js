@@ -5,7 +5,7 @@
 const BUILD = '20261003-134202';
 const CACHE = 'oscar-' + BUILD;
 const SHELL = [
-  './', './index.html', './styles.css', './data.js', './store.js', './drive.js', './media.js', './push.js', './app.js',
+  './', './index.html', './styles.css', './data.js', './guides.js', './store.js', './drive.js', './media.js', './push.js', './app.js',
   './manifest.webmanifest', './icon-192.png', './icon-512.png'
 ];
 
@@ -106,7 +106,7 @@ async function healthReminder() {
       const t = l.time || c.time, clock = t ? new Date(`2000-01-01T${t}`).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
       const more = due.length ? `\nAlso: ${due.length} health item${due.length > 1 ? 's' : ''} due` : '';
       return { title: `🎓 ${c.name || 'Training class'} ${l.due === today ? 'today' : 'tomorrow'}${clock ? ' at ' + clock : ''}`,
-        body: [c.place, c.trainer && 'with ' + c.trainer, c.bring && 'Bring: ' + c.bring].filter(Boolean).join(' · ') + more, tag: 'class', url: './#grow' };
+        body: [c.place, c.trainer && 'with ' + c.trainer, c.bring && 'Bring: ' + c.bring].filter(Boolean).join(' · ') + more, tag: 'class', url: './#train' };
     }
     if (!due.length) return fallback;
     const when = r => r.due < today ? 'overdue' : r.due === today ? 'today' : 'tomorrow';

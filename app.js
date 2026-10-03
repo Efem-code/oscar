@@ -80,9 +80,12 @@ function pottyStatus(now = Date.now()) {
   let interval = learned ? Math.round(0.5 * base + 0.5 * learned) : base;
   if (bad.length) interval = Math.min(interval, Math.round(median(bad) * 0.8));
   interval = clamp(interval, 30, 480);
+  /* A schedule you chose on the Train tab (stretching toward a work-day gap) wins over the guess. */
+  const target = Number(P().pottyTarget) || 0;
+  if (target) interval = target;
 
   let due = last ? T(last.at) + interval * 6e4 : now;
-  let reason = last ? `every ~${fmtMin(interval)}${learned ? ' (learned)' : ''}` : 'no potty logged yet';
+  let reason = last ? `every ~${fmtMin(interval)}${target ? ' (your schedule)' : learned ? ' (learned)' : ''}` : 'no potty logged yet';
   for (const r of logs) {
     if (last && r.at <= last.at) break;
     const d = hiddenTypes().has(r.type) ? null : LOG[r.type]?.trigger;
@@ -520,16 +523,132 @@ function weightChart(unit) {
     <div class="wlist">${pts.slice(-6).reverse().map(p => `<button ${p.id ? `data-act="editWeight" data-id="${p.id}"` : 'disabled'}>${fmtDay(localDay(p.at))} · ${p.v.toFixed(2)} ${unit}${p.vet ? ' (vet)' : ''}</button>`).join('')}</div>`;
 }
 
+/* ---------- Train tab ---------- */
+/* Its button handlers join ACT once that exists (it's declared further down). */
+const TRAIN_ACT = {};
+/* House-training progress, from the logs: how long he's holding it, the
+   accident-free streak, and when it's reasonable to stretch the schedule. */
+function pottyProgress() {
+  const now = Date.now();
+  const logs = Store.list('log', r => T(r.at) > now - 14 * 864e5 && (r.type === 'pee' || r.type === 'poop' || r.type === 'accident' || r.type === 'sleep')).reverse();
+  const gaps = []; let prev = null;
+  for (const r of logs) {
+    if (r.type === 'sleep') { prev = null; continue; }        // don't count overnight
+    if (prev && r.type !== 'accident') { const g = (T(r.at) - T(prev.at)) / 6e4; if (g >= 15 && g <= 600) gaps.push({ g, at: r.at }); }
+    prev = r;
+  }
+  const week = gaps.filter(x => T(x.at) > now - 7 * 864e5).map(x => x.g);
+  const accidents = Store.list('log', r => r.type === 'accident');
+  const lastAcc = accidents[0];
+  const firstLog = Store.list('log').slice(-1)[0];
+  const streakDays = Math.floor((now - T(lastAcc ? lastAcc.at : (firstLog ? firstLog.at : new Date().toISOString()))) / 864e5);
+  return { typical: week.length >= 3 ? median(week) : null, longest: week.length ? Math.max(...week) : null, streakDays, hadAccidents: !!lastAcc,
+    recentAccidents: accidents.filter(r => T(r.at) > now - 3 * 864e5).length, target: Number(P().pottyTarget) || 0, goal: Number(P().pottyGoal) || 240, samples: week.length };
+}
+
+function pottyPlanCard() {
+  const p = pottyProgress(), cur = p.target || (p.typical ? Math.round(p.typical / 15) * 15 : 0);
+  // Each step needs a few accident-free days of its own before the next one.
+  const sinceStep = P().pottyTargetAt ? Math.floor((Date.now() - T(P().pottyTargetAt)) / 864e5) : 99;
+  const ready = p.streakDays >= 5 && p.samples >= 5 && p.recentAccidents === 0 && sinceStep >= 3 && cur < p.goal;
+  const back = p.recentAccidents >= 2;
+  const next = Math.min(p.goal, (cur || 120) + 30);
+  const pct = cur ? Math.min(100, Math.round(100 * cur / p.goal)) : 0;
+  const advice = back ? `Two or more accidents in the last 3 days — step back to ${fmtMin(Math.max(60, (cur || 120) - 30))} for a few days, then try again.`
+    : ready ? `${p.streakDays} days without an accident — he’s ready to stretch to <b>${fmtMin(next)}</b>.`
+    : cur && cur >= p.goal && p.recentAccidents === 0 ? `He’s at your ${fmtMin(p.goal)} goal 🎉 Keep it steady.`
+    : sinceStep < 3 && p.recentAccidents === 0 ? `Holding at ${fmtMin(cur)} — give each step 3 accident-free days (day ${sinceStep + 1}).`
+    : p.samples < 5 ? 'Log a few more days of pees and poops to see his pattern.'
+    : `Keep the current schedule until he’s had 5 accident-free days${p.hadAccidents ? ` (now ${p.streakDays})` : ''}.`;
+  return `<section class="card"><h3>🚽 House-training progress</h3>
+    <div class="pp-grid">
+      <div><b>${p.typical ? fmtMin(p.typical) : '—'}</b><small>typical gap this week</small></div>
+      <div><b>${p.longest ? fmtMin(p.longest) : '—'}</b><small>longest held</small></div>
+      <div><b>${p.hadAccidents ? p.streakDays + ' d' : '—'}</b><small>since an accident</small></div>
+    </div>
+    <div class="goal"><div class="goal-bar"><i style="width:${pct}%"></i></div><small>Schedule ${cur ? fmtMin(cur) : 'not set'} · goal ${fmtMin(p.goal)} <button class="link" data-act="pottyGoal">change goal</button></small></div>
+    <p>${advice}</p>
+    <div class="btns">${ready && !back ? `<button class="primary" data-act="pottyStretch" data-m="${next}">Stretch to ${fmtMin(next)}</button>` : ''}
+      ${back ? `<button class="ghost" data-act="pottyStretch" data-m="${Math.max(60, (cur || 120) - 30)}">Step back</button>` : ''}
+      ${p.target ? '<button class="link" data-act="pottyStretch" data-m="0">Let the app guess again</button>' : ''}</div>
+    <details><summary>How to stretch the time between breaks</summary><ul>
+      <li>Add 15–30 minutes at a time, and only after several accident-free days at the current gap.</li>
+      <li>Keep the “extras” for now: out right after waking, eating and play. Stretch the gaps in between.</li>
+      <li>Signs he’s getting better: longer gaps with no accidents, holding it through the night, going quickly once outside, and asking at the door (sniffing, circling, whining, looking at you).</li>
+      <li>An accident usually means the step was too big — go back 15–30 minutes for a few days. No scolding; clean with enzyme cleaner so he isn’t drawn back to the spot.</li>
+      <li>For work days: young dogs shouldn’t be left to hold it for a full work day. Plan a midday break (you, a walker or daycare) even once he can hold longer.</li>
+    </ul></details></section>`;
+}
+
+TRAIN_ACT.pottyStretch = async d => {
+  const m = Number(d.m) || 0;
+  await Store.put({ id: 'profile', kind: 'profile', pottyTarget: m || '', pottyTargetAt: m ? new Date().toISOString() : '' });
+  toast(m ? `Schedule: every ${fmtMin(m)} — the countdown uses this now` : 'Back to the app’s own estimate');
+};
+TRAIN_ACT.pottyGoal = () => form({ title: '🎯 Longest gap you need', value: { goal: (Number(P().pottyGoal) || 240) / 60 },
+  intro: '<p class="muted">e.g. 4 hours until a midday break on work days.</p>',
+  fields: [{ k: 'goal', label: 'Hours', type: 'number', required: true }],
+  onSave: v => Store.put({ id: 'profile', kind: 'profile', pottyGoal: Math.round(Number(v.goal) * 60) }) });
+
+const doneGames = id => Store.list('enrich', r => r.game === id);
+TRAIN_ACT.gameDone = async d => { await Store.put({ kind: 'enrich', game: d.id }); navigator.vibrate && navigator.vibrate(15); toast('🧠 Nice — logged'); };
+TRAIN_ACT.guide = d => {
+  const g = GUIDES.find(x => x.id === d.id);
+  const hist = Store.list('train', r => r.skill === g.skill).slice(0, 4);
+  sheet(`<h2>${g.icon} ${esc(g.title)}</h2><p class="muted">${esc(g.why)}</p>
+    <h4>Steps</h4><ol class="steps">${g.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+    <div class="banner jindo">🐕 <b>Jindo tip:</b> ${esc(g.jindo)}</div>
+    <h4>Common mistakes</h4><ul>${g.mistakes.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+    ${hist.length ? `<h4>Recent sessions</h4><div class="hist">${hist.map(h => `<span>${fmtDay(localDay(h.at))} ${'★'.repeat(h.rating || 0)}${'☆'.repeat(5 - (h.rating || 0))}</span>`).join('')}</div>` : ''}
+    <div class="btns"><span class="grow"></span><button class="primary" data-act="train" data-skill="${esc(g.skill)}">Log a practice session</button></div>`);
+};
+TRAIN_ACT.game = d => {
+  const g = GAMES.find(x => x.id === d.id), n = doneGames(g.id).length;
+  sheet(`<h2>${g.icon} ${esc(g.title)}</h2><p class="muted">${esc(g.time)} · ${g.level === 1 ? 'easy' : 'a bit harder'} · you need: ${esc(g.need)}</p>
+    <p>${esc(g.how)}</p>${n ? `<p class="muted small">Done ${n} time${n > 1 ? 's' : ''} · last ${fmtDay(localDay(doneGames(g.id)[0].at))}</p>` : ''}
+    <div class="btns"><span class="grow"></span><button class="primary" data-act="gameDone" data-id="${g.id}">We did it 🎉</button></div>`);
+};
+
+/* A different guide and game suggestion each day. */
+function todaysPicks() {
+  const n = Math.floor(Date.now() / 864e5);
+  const fresh = GAMES.filter(g => !doneGames(g.id).some(r => daysUntil(localDay(r.at)) > -3));
+  return { guide: GUIDES[n % GUIDES.length], game: (fresh.length ? fresh : GAMES)[n % (fresh.length || GAMES.length)] };
+}
+
+VIEWS.train = () => {
+  const pick = todaysPicks();
+  const weekGames = Store.list('enrich', r => T(r.at) > Date.now() - 7 * 864e5).length;
+  return `${header('Training & brain games')}
+    <div class="cols"><div>
+    <section class="card"><h3>✨ Today’s ideas</h3>
+      <button class="item-main block" data-act="guide" data-id="${pick.guide.id}"><span class="ico">${pick.guide.icon}</span><span><b>Practise: ${esc(pick.guide.title)}</b><small>${esc(pick.guide.when)}</small></span></button>
+      <button class="item-main block" data-act="game" data-id="${pick.game.id}"><span class="ico">${pick.game.icon}</span><span><b>Play: ${esc(pick.game.title)}</b><small>${esc(pick.game.time)} · ${esc(pick.game.need)}</small></span></button>
+    </section>
+    ${pottyPlanCard()}
+    <section class="card"><h3>📚 How to train</h3>
+      ${GUIDES.map(g => `<button class="item-main block" data-act="guide" data-id="${g.id}"><span class="ico">${g.icon}</span><span><b>${esc(g.title)}</b><small>${esc(g.when)}</small></span></button>`).join('')}
+      <details><summary>Training basics that make everything easier</summary><ul>${TRAINING_BASICS.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>
+    </section>
+    </div><div>
+    <section class="card"><div class="h-row"><h3>🧩 Brain games</h3><span class="muted small">${weekGames} this week</span></div>
+      <p class="muted small">10 minutes of sniffing and problem-solving can tire him like a long walk. Tip: serve one of his two meals this way.</p>
+      <div class="games">${GAMES.map(g => { const n = doneGames(g.id).length; return `<button class="game" data-act="game" data-id="${g.id}"><span>${g.icon}</span><b>${esc(g.title)}</b><small>${esc(g.time)}${n ? ' · ✓' + n : ''}</small></button>`; }).join('')}</div>
+    </section>
+    <section class="card"><div class="h-row"><h3>🎓 Skills</h3><button class="pill" data-act="addSkill">+ Skill</button></div>
+      <div class="skills">${skillList().map(skillCard).join('')}</div></section>
+    ${classesCard()}
+    <section class="card"><details><summary><b>🗓️ A good day’s shape</b></summary><ul>${DAILY_SHAPE.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details></section>
+    </div></div>`;
+};
+
 VIEWS.grow = () => {
   const d = App.ageDays();
   const wksLeft = d == null ? null : Math.ceil((16 * 7 - d) / 7);
-  return `${header('Training & growing up')}
+  return `${header('Growing up')}
     <div class="cols"><div>
-    ${classesCard()}
     ${breedNotes() ? `<section class="card breed"><details><summary><b>🐕 About ${esc(P().breed)}s</b> <span class="muted small">tendencies, not rules</span></summary>
       <ul>${breedNotes().tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details></section>` : ''}
-    <section class="card"><div class="h-row"><h3>Training</h3><button class="pill" data-act="addSkill">+ Skill</button></div>
-      <div class="skills">${skillList().map(skillCard).join('')}</div></section>
     ${trendsCard()}
     ${pottyStats()}
     </div><div>
@@ -741,6 +860,7 @@ function syncLine() {
 
 /* ---------- actions ---------- */
 const ACT = {};
+Object.assign(ACT, TRAIN_ACT);
 
 ACT.tab = d => { ui.tab = d.tab; if (d.tab === 'today') ui.day = todayKey(); render(); window.scrollTo(0, 0); };
 ACT.log = d => quickLog(d.k);
