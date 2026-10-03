@@ -89,12 +89,14 @@ const ACTIONS = {
   upStart: q => {
     const r = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id', {
       method: 'post', contentType: 'application/json; charset=UTF-8', muteHttpExceptions: true,
-      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Upload-Content-Type': q.mime, 'X-Upload-Content-Length': String(q.size) },
+      headers: Object.assign({ Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Upload-Content-Type': q.mime, 'X-Upload-Content-Length': String(q.size) },
+        // Naming the app's origin lets the phone send the file straight to Google (CORS) instead of through here.
+        /^https:\/\/efem-code\.github\.io$/.test(q.origin || '') ? { Origin: q.origin } : {}),
       payload: JSON.stringify({ name: q.name, parents: [parentFor_(q).getId()] }),
     });
     if (r.getResponseCode() !== 200) throw new Error('Drive would not start the upload: ' + r.getContentText().slice(0, 200));
     const h = r.getAllHeaders();
-    return { session: h.Location || h.location };
+    return { session: h.Location || h.location, cors: /^https:\/\/efem-code\.github\.io$/.test(q.origin || '') };
   },
   upChunk: q => {
     const bytes = Utilities.base64Decode(q.b64);

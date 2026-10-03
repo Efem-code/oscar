@@ -332,3 +332,8 @@ details summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 
 .cam-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 11px; font-weight: 650; margin-bottom: 10px; box-shadow: var(--shadow); }
 .step ol { padding-left: 18px; margin: 6px 0; }
+
+.card.walk { border-color: var(--good); }
+.walk-btns { display: flex; gap: 8px; margin-top: 10px; }
+.walk-btns button { flex: 1; background: var(--soft); border-radius: 12px; padding: 11px 4px; font-weight: 650; }
+.walk-btns .primary { background: var(--accent); color: var(--accent-ink); }

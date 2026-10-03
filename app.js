@@ -85,7 +85,7 @@ function pottyStatus(now = Date.now()) {
   let reason = last ? `every ~${fmtMin(interval)}${learned ? ' (learned)' : ''}` : 'no potty logged yet';
   for (const r of logs) {
     if (last && r.at <= last.at) break;
-    const d = LOG[r.type]?.trigger;
+    const d = hiddenTypes().has(r.type) ? null : LOG[r.type]?.trigger;
     if (d != null && T(r.at) + d * 6e4 < due) { due = T(r.at) + d * 6e4; reason = `${d} min after ${LOG[r.type].label.toLowerCase()}`; }
   }
   return { due, reason, interval, learned, base, asleep, last, sleepEv };
@@ -175,8 +175,25 @@ function form({ title, intro = '', fields, value = {}, onSave, onDelete, saveLab
 }
 
 /* ---------- logging ---------- */
+/* Which one-tap buttons show is a shared choice (stored on the profile), and a
+   hidden type stops nudging the potty countdown — a bowl that's always full
+   or play all day isn't an event worth logging. */
+const hiddenTypes = () => new Set(P().quickHide || []);
+const quickTypes = () => LOG_TYPES.filter(t => !hiddenTypes().has(t.k));
+
+/* An open walk is a walk log with no end yet. */
+const activeWalk = () => Store.list('log', r => r.type === 'walk' && r.open)[0];
+
 async function quickLog(type, extra = {}) {
   if (type === 'accident') return accidentSheet();
+  if (type === 'walk') {
+    const w = activeWalk();
+    if (w) return endWalk(w);
+    const rec = await Store.put({ kind: 'log', type: 'walk', open: true });
+    navigator.vibrate && navigator.vibrate(15);
+    return toast(`🦮 Walk started ${fmtTime(rec.at)}`, [{ label: 'Undo', run: () => Store.remove(rec.id) }]);
+  }
+  if ((type === 'pee' || type === 'poop') && activeWalk()) extra = { onWalk: activeWalk().id, ...extra };
   if (type === 'note') return form({ title: 'Note', fields: [{ k: 'note', label: 'What happened?', type: 'textarea', required: true }, { k: 'at', label: 'When', type: 'datetime' }],
     onSave: v => Store.put({ kind: 'log', type: 'note', note: v.note, at: v.at }) });
   const rec = await Store.put({ kind: 'log', type, ...extra });
@@ -185,6 +202,21 @@ async function quickLog(type, extra = {}) {
     { label: 'Edit', run: () => editLog(rec.id) },
     { label: 'Undo', run: () => Store.remove(rec.id) },
   ]);
+}
+
+async function endWalk(w) {
+  const minutes = Math.max(1, Math.round((Date.now() - T(w.at)) / 6e4));
+  await Store.put({ id: w.id, open: false, minutes });
+  const did = Store.list('log', r => r.onWalk === w.id).map(r => LOG[r.type].icon).join(' ');
+  toast(`🦮 Walk done — ${fmtMin(minutes)}${did ? ' · ' + did : ''}`, [{ label: 'Edit', run: () => editLog(w.id) }]);
+}
+
+function walkCard() {
+  const w = activeWalk(); if (!w) return '';
+  const did = Store.list('log', r => r.onWalk === w.id);
+  return `<section class="card walk"><div class="h-row"><div><div class="cd-label">On a walk</div><div class="cd-big" id="walk-t">${fmtMin((Date.now() - T(w.at)) / 6e4)}</div>
+    <p class="muted small">since ${fmtTime(w.at)}${did.length ? ' · ' + did.map(r => LOG[r.type].icon).join(' ') : ''}</p></div><div class="big-emoji">🦮</div></div>
+    <div class="walk-btns"><button data-act="log" data-k="pee">💧 Pee</button><button data-act="log" data-k="poop">💩 Poop</button><button class="primary" data-act="log" data-k="walk">End walk</button></div></section>`;
 }
 
 function accidentSheet() {
@@ -256,7 +288,7 @@ function syncChip() {
     idle: ['ok', s.last ? 'Synced' : 'Connected'],
   };
   let [cls, txt] = map[s.status] || map.off;
-  if (s.upload) txt = `Uploading ${s.upload.n}/${s.upload.of} · ${Math.round(s.upload.frac * 100)}%`;
+  if (s.upload) { cls = 'busy'; txt = s.upload.totalMB > 20 ? `Uploading ${Math.round(s.upload.doneMB)} of ${Math.round(s.upload.totalMB)} MB` : `Uploading ${s.upload.n}/${s.upload.of}`; }
   return `<button class="sync ${cls}" data-act="syncTap" title="${esc(s.msg)}"><i></i>${txt}</button>`;
 }
 
@@ -282,6 +314,8 @@ function countdownCard() {
 }
 
 function tickCountdown() {
+  const wt = $('#walk-t'), w = wt && activeWalk();
+  if (w) wt.textContent = fmtMin((Date.now() - T(w.at)) / 6e4);
   const big = $('#cd-big'); if (!big) return;
   const s = pottyStatus(), now = Date.now();
   const left = (s.due - now) / 6e4;
@@ -361,7 +395,8 @@ VIEWS.today = () => {
     ${homeCard()}
     ${P().homeDay && daysUntil(P().homeDay) > 0 && !Store.list('log').length ? '' : countdownCard()}
     ${whoLine()}
-    <section class="quick">${LOG_TYPES.map(t => `<button data-act="log" data-k="${t.k}" class="q-${t.k}"><span>${t.icon}</span>${t.label}</button>`).join('')}</section>
+    ${walkCard()}
+    <section class="quick" style="grid-template-columns: repeat(${[0, 1, 2, 3, 4, 5, 3, 4, 4, 5, 5][quickTypes().length] || 5}, 1fr)">${quickTypes().map(t => `<button data-act="log" data-k="${t.k}" class="q-${t.k}"><span>${t.icon}</span>${t.k === 'walk' && activeWalk() ? 'End walk' : t.label}</button>`).join('')}</section>
     ${appCfg('cam').on ? `<button class="cam-btn" data-act="openCam">📹 Check on ${esc(App.pet())} <span class="muted small">${esc(camName())}</span></button>` : ''}
     <section class="capture">
       <button data-act="capture" data-k="photo">📷 Photo</button>
@@ -619,6 +654,7 @@ VIEWS.more = () => {
       <button class="item-main block" data-act="careSheet"><span class="ico">📋</span><span><b>Care sheet</b><small>One page for a sitter, groomer or new vet — print or share</small></span></button>
       <button class="item-main block" data-act="syncSettings"><span class="ico">☁️</span><span><b>Sync & sharing</b><small>${esc(syncLine())}</small></span></button>
       <button class="item-main block" data-act="backup"><span class="ico">💾</span><span><b>Backup</b><small>Save or restore everything as a file</small></span></button>
+      <button class="item-main block" data-act="quickSettings"><span class="ico">🔘</span><span><b>Log buttons</b><small>${quickTypes().length} of ${LOG_TYPES.length} shown${hiddenTypes().size ? ' · hidden: ' + [...hiddenTypes()].map(k => LOG[k]?.label).join(', ') : ''}</small></span></button>
       <button class="item-main block" data-act="camSettings"><span class="ico">📹</span><span><b>Pet camera button</b><small>${appCfg('cam').on ? 'Opens ' + esc(camName()) + ' from Today' : 'Hidden'}</small></span></button>
       <button class="item-main block" data-act="vetAppSettings"><span class="ico">🩺</span><span><b>Vet app button</b><small>${appCfg('vet').on ? 'Opens ' + esc(appCfg('vet').name) + ' from Health' : 'Hidden'}</small></span></button>
       <button class="item-main block" data-act="notify"><span class="ico">🔔</span><span><b>Notifications</b><small>${Push.enabled() ? 'On — you’ll hear when new photos arrive' : 'Off — tap to get told about new photos'}</small></span></button>
@@ -1361,6 +1397,20 @@ function appSettings(k) {
 ACT.camSettings = () => appSettings('cam');
 ACT.vetAppSettings = () => appSettings('vet');
 
+/* ---------- log buttons ---------- */
+ACT.quickSettings = () => {
+  const hid = hiddenTypes();
+  sheet(`<h2>🔘 Log buttons</h2><p class="muted">Pick what you actually log. Hidden ones also stop changing the potty countdown. Shared with both phones.</p>
+    ${LOG_TYPES.map(t => `<label class="check"><input type="checkbox" value="${t.k}" ${hid.has(t.k) ? '' : 'checked'}><span>${t.icon} ${esc(t.label)}${t.trigger ? `<small>moves the next potty break to ${t.trigger} min after</small>` : ''}</span></label>`).join('')}
+    <div class="btns"><span class="grow"></span><button class="primary" id="qs-save">Save</button></div>`, r => {
+    $('#qs-save', r).onclick = async () => {
+      const hide = [...r.querySelectorAll('input[type=checkbox]')].filter(x => !x.checked).map(x => x.value);
+      await Store.put({ id: 'profile', kind: 'profile', quickHide: hide });
+      closeSheet();
+    };
+  });
+};
+
 /* ---------- notifications ---------- */
 ACT.notify = () => {
   const on = Push.enabled();
@@ -1471,7 +1521,16 @@ window.addEventListener('popstate', () => { if (!$('#sheet').hidden) closeSheet(
   await Store.open();
   if (!Store.pref('oscar.pushSince')) Store.setPref('oscar.pushSince', new Date().toISOString());
   const goto = h => { if (VIEWS[h]) { ui.tab = h; render(); } };
-  goto(location.hash.slice(1));
+  /* Long-press app-icon shortcuts open ./#log=pee etc.: log it, then clear the hash so a reload doesn't log twice. */
+  const fromShortcut = () => {
+    const m = location.hash.match(/^#log=(\w+)$/);
+    if (!m || !LOG[m[1]]) return false;
+    history.replaceState(null, '', location.pathname);
+    ui.tab = 'today'; render(); quickLog(m[1]);
+    return true;
+  };
+  if (!fromShortcut()) goto(location.hash.slice(1));
+  addEventListener('hashchange', fromShortcut);
   navigator.serviceWorker?.addEventListener('message', e => e.data?.goto && goto(e.data.goto));
   Store.blobClear('c:').catch(() => {});   // full-size copies an earlier version kept on the phone
   Store.onChange(() => {

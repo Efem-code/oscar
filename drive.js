@@ -82,8 +82,38 @@ const Drive = (() => {
   const SMALL = 5 * 1024 * 1024;
   const CHUNK = 4 * 1024 * 1024;          // a multiple of 256 KB, as Drive requires
 
+  /* Big files go straight from the phone to Google: the bridge only opens the
+     upload session (with our origin, so Google allows the browser to finish
+     it), then the whole file goes up in one PUT at full network speed —
+     instead of 4 MB base64 pieces relayed through Apps Script. Falls back to
+     the relay if the bridge is older or the direct PUT is refused. */
+  let direct = Store.pref('oscar.direct') !== 'no';
+  function putDirect(session, blob, onProgress) {
+    return new Promise((res, rej) => {
+      const x = new XMLHttpRequest();
+      x.open('PUT', session);
+      x.upload.onprogress = e => e.lengthComputable && onProgress(e.loaded / e.total);
+      x.onload = () => {
+        if (x.status === 200 || x.status === 201) { try { return res(JSON.parse(x.responseText).id); } catch {} }
+        rej(Object.assign(new Error('Direct upload failed (' + x.status + ')'), { status: x.status }));
+      };
+      x.onerror = () => rej(Object.assign(new Error('Direct upload blocked'), { status: 0 }));
+      x.send(blob);
+    });
+  }
+
   async function upload(p, onProgress) {
     const meta = { name: p.name, mime: p.mime || 'application/octet-stream', role: p.role === 'view' ? 'thumb' : p.role, doc: !!p.doc, ym: p.ym };
+    if (direct && p.blob.size > 512 * 1024) {
+      try {
+        const { session, cors } = await call('upStart', { ...meta, size: p.blob.size, origin: location.origin });
+        if (cors) return await putDirect(session, p.blob, onProgress);
+        direct = false;                                    // bridge too old to open browser sessions
+      } catch (e) {
+        if (e.status !== 0) throw e;                       // a real failure: retry next sync
+        direct = false; Store.setPref('oscar.direct', 'no');  // the browser can't reach Google directly — relay from now on
+      }
+    }
     if (p.blob.size <= SMALL) {
       const r = await call('put', { ...meta, b64: await b64(p.blob) });
       onProgress(1);
@@ -156,25 +186,53 @@ const Drive = (() => {
     }
   }
 
+  /* Uploads run on their own, so a 100 MB video never holds up a pee log:
+     sync pushes logs in seconds while this works through the queue. */
+  let uploading = false, wake = null;
+  async function keepAwake(on) {
+    try {
+      if (on && !wake && navigator.wakeLock && document.visibilityState === 'visible') { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); }
+      if (!on && wake) { await wake.release(); wake = null; }
+    } catch { wake = null; }
+  }
+  document.addEventListener('visibilitychange', () => { if (uploading && document.visibilityState === 'visible') { keepAwake(true); flushUploads(); } });
+
   async function flushUploads() {
-    // Thumbnails, then screen-size copies, then originals: the other phone sees a new photo long before a big video finishes.
-    const order = { thumb: 0, view: 1 };
-    const queue = (await Store.pendAll()).sort((a, b) => (order[a.role] ?? 2) - (order[b.role] ?? 2));
+    if (uploading || !configured() || !navigator.onLine) return;
+    uploading = true;
+    try {
+      await (navigator.locks ? navigator.locks.request('oscar-upload', { ifAvailable: true }, l => l ? uploadAll() : null) : uploadAll());
+    } catch (e) {
+      state.msg = 'Upload paused: ' + e.message; emit();
+    } finally {
+      uploading = false; state.upload = null; emit(); keepAwake(false);
+    }
+  }
+
+  async function uploadAll() {
+    // Thumbnails, then screen-size copies, then photos, then videos — smallest first — so most things land quickly.
+    const rank = p => p.role === 'thumb' ? 0 : p.role === 'view' ? 1 : (p.mime || '').startsWith('video') ? 3 : 2;
+    const queue = (await Store.pendAll()).sort((a, b) => rank(a) - rank(b) || (a.blob?.size || 0) - (b.blob?.size || 0));
+    if (!queue.length) return;
+    const total = queue.reduce((a, p) => a + (p.blob?.size || 0), 0);
+    let done = 0;
+    keepAwake(true);
     for (let i = 0; i < queue.length; i++) {
-      const p = queue[i];
+      const p = queue[i], size = p.blob?.size || 0;
       const rec = Store.get(p.recId);
       if (!rec) {
         // Only drop the upload if the photo was really deleted — not merely unknown to this copy.
         const r = await Store.raw(p.recId);
         if (!r || r.deleted) await Store.pendDel(p.id);
-        continue;
+        done += size; continue;
       }
-      state.upload = { name: p.name, n: i + 1, of: queue.length, frac: 0 }; emit();
-      const id = await upload(p, frac => { state.upload.frac = frac; emit(); });
+      state.upload = { name: p.name, n: i + 1, of: queue.length, frac: 0, doneMB: done / 1e6, totalMB: total / 1e6 }; emit();
+      const id = await upload(p, f => { state.upload.frac = f; state.upload.doneMB = (done + f * size) / 1e6; emit(); });
       await Store.put({ id: rec.id, [{ thumb: 'thumbId', view: 'viewId' }[p.role] || 'driveId']: id });
       await Store.pendDel(p.id);
+      done += size;
+      soon(1500);                // let the other phone see it without waiting for the whole queue
     }
-    state.upload = null;
   }
 
   async function sync() {
@@ -190,8 +248,8 @@ const Drive = (() => {
       if (!ran) { set('idle'); return; }
       state.last = Date.now();
       set('idle');
+      flushUploads();            // runs alongside; doesn't block the next sync
     } catch (e) {
-      state.upload = null;
       set('error', e.message);
     } finally {
       busy = false;
@@ -203,9 +261,7 @@ const Drive = (() => {
     await Store.refresh();
     await requeueMissing();
     const files = await pull();
-    await push(files);          // logs before media, so a slow video never holds up a pee log
-    await flushUploads();
-    await push(files);          // the new Drive ids from the uploads
+    await push(files);
     try { await Push.check(); await Push.announce(); await Push.presign(); await push(files); } catch {}
   }
 
