@@ -362,7 +362,7 @@ VIEWS.today = () => {
     ${P().homeDay && daysUntil(P().homeDay) > 0 && !Store.list('log').length ? '' : countdownCard()}
     ${whoLine()}
     <section class="quick">${LOG_TYPES.map(t => `<button data-act="log" data-k="${t.k}" class="q-${t.k}"><span>${t.icon}</span>${t.label}</button>`).join('')}</section>
-    ${Store.pref('oscar.cam') !== 'off' ? `<button class="cam-btn" data-act="openCam">📹 Check on ${esc(App.pet())} <span class="muted small">${esc(camName())}</span></button>` : ''}
+    ${appCfg('cam').on ? `<button class="cam-btn" data-act="openCam">📹 Check on ${esc(App.pet())} <span class="muted small">${esc(camName())}</span></button>` : ''}
     <section class="capture">
       <button data-act="capture" data-k="photo">📷 Photo</button>
       <button data-act="capture" data-k="video">🎥 Video</button>
@@ -391,6 +391,7 @@ VIEWS.health = () => {
   const unit = P().unit || 'kg';
   const hasBday = !!P().birthday;
   return `${header('Health & vet')}
+    ${vetAppBtn()}
     <div class="cols"><div>
     <section class="card"><div class="h-row"><h3>Due</h3><button class="pill" data-act="addHealth">+ Reminder</button></div>
       ${due.filter(r => daysUntil(r.due) < 0).length > 1 ? `<button class="banner" data-act="reviewPast">📋 ${due.filter(r => daysUntil(r.due) < 0).length} past due — already done before he came home? <b>Review</b></button>` : ''}
@@ -618,7 +619,8 @@ VIEWS.more = () => {
       <button class="item-main block" data-act="careSheet"><span class="ico">📋</span><span><b>Care sheet</b><small>One page for a sitter, groomer or new vet — print or share</small></span></button>
       <button class="item-main block" data-act="syncSettings"><span class="ico">☁️</span><span><b>Sync & sharing</b><small>${esc(syncLine())}</small></span></button>
       <button class="item-main block" data-act="backup"><span class="ico">💾</span><span><b>Backup</b><small>Save or restore everything as a file</small></span></button>
-      <button class="item-main block" data-act="camSettings"><span class="ico">📹</span><span><b>Pet camera button</b><small>${Store.pref('oscar.cam') === 'off' ? 'Hidden' : 'Opens ' + esc(camName()) + ' from Today'}</small></span></button>
+      <button class="item-main block" data-act="camSettings"><span class="ico">📹</span><span><b>Pet camera button</b><small>${appCfg('cam').on ? 'Opens ' + esc(camName()) + ' from Today' : 'Hidden'}</small></span></button>
+      <button class="item-main block" data-act="vetAppSettings"><span class="ico">🩺</span><span><b>Vet app button</b><small>${appCfg('vet').on ? 'Opens ' + esc(appCfg('vet').name) + ' from Health' : 'Hidden'}</small></span></button>
       <button class="item-main block" data-act="notify"><span class="ico">🔔</span><span><b>Notifications</b><small>${Push.enabled() ? 'On — you’ll hear when new photos arrive' : 'Off — tap to get told about new photos'}</small></span></button>
       <button class="item-main block" data-act="me"><span class="ico">🙋</span><span><b>You: ${esc(Store.who())}</b><small>Name shown on what you log · alerts</small></span></button>
     </section>
@@ -720,6 +722,7 @@ ACT.showVet = d => {
     <h4>Invoices & records</h4>
     <div class="grid">${docs.map(m => `<button class="gi" data-act="view" data-id="${m.id}"><div class="th" data-thumb="${m.id}"></div></button>`).join('')}
       <button class="gi add" data-act="capture" data-k="doc" data-vet="${v.id}">＋<small>Photo</small></button></div>
+ ${vetAppBtn()}
     <div class="btns"><button class="ghost" data-act="claimFromVet" data-id="${v.id}">+ Insurance claim</button><span class="grow"></span><button class="primary" data-act="editVet" data-id="${v.id}">Edit</button></div>`,
     root => Media.hydrate(root));
 };
@@ -1009,6 +1012,7 @@ ACT.showAppt = d => {
     <p class="muted">${fmtDay(a.day)}${a.time ? ' at ' + fmtClock(a.time) : ''} · ${n > 1 ? `in ${n} days` : n === 1 ? 'tomorrow' : n === 0 ? 'today' : `${-n} day${n === -1 ? '' : 's'} ago`}</p>
     <dl class="kv">${kv('Type', a.type)}${kv('Where', a.clinic)}${kv('With', a.vet)}${phone ? `<dt>Phone</dt><dd><a href="tel:${esc(phone)}">${esc(phone)}</a></dd>` : ''}
       ${addr ? `<dt>Directions</dt><dd><a href="https://maps.google.com/?q=${encodeURIComponent(addr)}" target="_blank" rel="noopener">${esc(addr)}</a></dd>` : ''}${kv('Bring / ask', a.bring)}</dl>
+    ${vetAppBtn()}
     <div class="btns"><button class="danger" id="ap-cancel">Cancelled</button><span class="grow"></span>
       <button class="ghost" data-act="appt" data-id="${a.id}">Edit</button>
       ${a.type !== 'Groomer' ? `<button class="primary" data-act="apptToVisit" data-id="${a.id}">Log the visit</button>` : `<button class="primary" id="ap-done">Done</button>`}</div>`, r => {
@@ -1290,61 +1294,72 @@ ACT.wishCopy = async () => {
   try { await navigator.clipboard.writeText(`Puppy Log ideas:\n${text}`); toast('Copied — paste it anywhere'); } catch { toast('Copy failed'); }
 };
 
-/* ---------- pet camera shortcut ---------- */
+/* ---------- shortcuts into other apps (Furbo, Digitail…) ---------- */
 /* A web app can't show another app inside it, so this is the next best thing:
-   one tap from Today into the camera's own app. Android opens it by package
-   name; iPhone can't open other apps by ID, so it runs a one-step Apple
-   Shortcut ("Open App → Furbo") that the user makes once. */
+   one tap into that app. Android: a plain <scheme>:// link the app registers
+   (Chrome's intent:// form with a Play Store fallback went straight to the
+   store even with the app installed — tested on the Fold). iPhone can't open
+   apps by ID, so it tries the same link, then falls back to a one-step Apple
+   Shortcut ("Open App → …") the user makes once. Find an Android app's
+   links with: adb shell dumpsys package <id> (Activity Resolver Table). */
 const isIPhone = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const camName = () => Store.pref('oscar.camName') || 'Furbo';
-const camPkg = () => Store.pref('oscar.camPkg') || 'com.tomofun.furbo';
-const camShortcut = () => Store.pref('oscar.camShortcut') || 'Open Furbo';
+const APP_LINKS = {
+  cam: { pref: 'cam', icon: '📹', title: 'Pet camera button', name: 'Furbo', pkg: 'com.tomofun.furbo', scheme: 'furbo', where: 'Today' },
+  vet: { pref: 'vetapp', icon: '🩺', title: 'Vet app button', name: 'Digitail', pkg: 'com.digitail.digitail', scheme: 'digitail', where: 'Health' },
+};
+const appCfg = k => {
+  const d = APP_LINKS[k], p = n => Store.pref(`oscar.${d.pref}${n}`);
+  return { ...d, key: k, on: p('') !== 'off', name: p('Name') || d.name, pkg: p('Pkg') || d.pkg, scheme: p('Scheme') || d.scheme,
+    shortcut: p('Shortcut') || `Open ${p('Name') || d.name}`, shortcutReady: !!p('ShortcutReady') };
+};
+const camName = () => appCfg('cam').name;
 
-ACT.openCam = () => {
+function openApp(k) {
+  const c = appCfg(k);
   if (isIPhone()) {
-    if (Store.pref('oscar.camShortcutReady')) { location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(camShortcut())}`; return; }
-    // Try the app's own link first; if nothing opened after a moment, show the Shortcut setup.
-    location.href = camScheme() + '://';
-    setTimeout(() => { if (document.visibilityState === 'visible') ACT.camSettings(); }, 1800);
+    if (c.shortcutReady) { location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(c.shortcut)}`; return; }
+    location.href = c.scheme + '://';
+    setTimeout(() => { if (document.visibilityState === 'visible') appSettings(k); }, 1800);
   } else {
-    /* A plain furbo:// link opens the app. Chrome's intent:// form (with a
-       Play Store fallback) went straight to the store from the installed
-       app, even with Furbo installed — tested on the Fold. */
-    location.href = camScheme() + '://open';
+    location.href = c.scheme + '://open';
     setTimeout(() => {
-      if (document.visibilityState === 'visible') toast(`${esc(camName())} didn’t open — is it installed?`, [{ label: 'Get it', run: () => { location.href = `https://play.google.com/store/apps/details?id=${camPkg()}`; } }]);
+      if (document.visibilityState === 'visible') toast(`${esc(c.name)} didn’t open — is it installed?`, [{ label: 'Get it', run: () => { location.href = `https://play.google.com/store/apps/details?id=${c.pkg}`; } }]);
     }, 2500);
   }
-};
-const camScheme = () => Store.pref('oscar.camScheme') || 'furbo';
+}
+ACT.openCam = () => openApp('cam');
+ACT.openVetApp = () => openApp('vet');
+const vetAppBtn = () => appCfg('vet').on ? `<button class="cam-btn" data-act="openVetApp">🩺 Open ${esc(appCfg('vet').name)} <span class="muted small">vet records & bookings</span></button>` : '';
 
-ACT.camSettings = () => {
-  const ios = isIPhone();
-  sheet(`<h2>📹 Pet camera button</h2>
-    <p class="muted">Adds a “Check on ${esc(App.pet())}” button on Today that jumps straight into your camera’s app. Its own alerts (barking etc.) keep coming as normal notifications.</p>
-    <div class="fld"><label>Camera app name</label><input id="cam-name" value="${esc(camName())}"></div>
-    ${ios ? `<div class="step ${Store.pref('oscar.camShortcutReady') ? 'ok' : ''}"><b>One-time iPhone setup</b>
+function appSettings(k) {
+  const c = appCfg(k), ios = isIPhone(), key = n => `oscar.${c.pref}${n}`;
+  sheet(`<h2>${c.icon} ${esc(c.title)}</h2>
+    <p class="muted">A one-tap button on ${c.where} that jumps straight into ${esc(c.name)}. Its own notifications keep coming as normal.</p>
+    <div class="fld"><label>App name</label><input id="ap-name" value="${esc(c.name)}"></div>
+    ${ios ? `<div class="step ${c.shortcutReady ? 'ok' : ''}"><b>One-time iPhone setup</b>
         <p class="small">iPhone doesn’t let web apps open other apps directly, so the button runs a tiny Shortcut:</p>
-        <ol class="small"><li>Open the <b>Shortcuts</b> app → <b>+</b></li><li>Add action → search <b>Open App</b> → choose <b>${esc(camName())}</b></li>
-        <li>Tap the name at the top → rename it exactly: <b>${esc(camShortcut())}</b> → Done</li></ol>
-        <div class="fld"><label>Shortcut name</label><input id="cam-sc" value="${esc(camShortcut())}"></div>
-        <p><button class="ghost" id="cam-test">Test it</button></p></div>`
-      : `<div class="fld"><label>Android app ID <small>Furbo is com.tomofun.furbo — change it for another brand</small></label><input id="cam-pkg" value="${esc(camPkg())}"></div>
-         <div class="fld"><label>App link <small>Furbo’s is furbo</small></label><input id="cam-scheme" value="${esc(camScheme())}"></div>
-         <p><button class="ghost" id="cam-test">Test it</button></p>`}
-    <label class="tog"><input type="checkbox" id="cam-show" ${Store.pref('oscar.cam') !== 'off' ? 'checked' : ''}> Show the button on Today</label>
-    <div class="btns"><span class="grow"></span><button class="primary" id="cam-save">Save</button></div>`, r => {
+        <ol class="small"><li>Open the <b>Shortcuts</b> app → <b>+</b></li><li>Add action → search <b>Open App</b> → choose <b>${esc(c.name)}</b></li>
+        <li>Tap the name at the top → rename it exactly: <b>${esc(c.shortcut)}</b> → Done</li></ol>
+        <div class="fld"><label>Shortcut name</label><input id="ap-sc" value="${esc(c.shortcut)}"></div>
+        <p><button class="ghost" id="ap-test">Test it</button></p></div>`
+      : `<div class="fld"><label>Android app ID <small>${esc(APP_LINKS[k].name)} is ${APP_LINKS[k].pkg}</small></label><input id="ap-pkg" value="${esc(c.pkg)}"></div>
+         <div class="fld"><label>App link <small>${esc(APP_LINKS[k].name)}’s is ${APP_LINKS[k].scheme}</small></label><input id="ap-scheme" value="${esc(c.scheme)}"></div>
+         <p><button class="ghost" id="ap-test">Test it</button></p>`}
+    <label class="tog"><input type="checkbox" id="ap-show" ${c.on ? 'checked' : ''}> Show the button on ${c.where}</label>
+    <div class="btns"><span class="grow"></span><button class="primary" id="ap-save">Save</button></div>`, r => {
     const save = () => {
-      Store.setPref('oscar.camName', $('#cam-name', r).value.trim() || 'Furbo');
-      if ($('#cam-pkg', r)) Store.setPref('oscar.camPkg', $('#cam-pkg', r).value.trim() || 'com.tomofun.furbo');
-      if ($('#cam-scheme', r)) Store.setPref('oscar.camScheme', $('#cam-scheme', r).value.trim().replace(/:.*$/, '') || 'furbo');
-      if ($('#cam-sc', r)) { Store.setPref('oscar.camShortcut', $('#cam-sc', r).value.trim() || 'Open Furbo'); Store.setPref('oscar.camShortcutReady', '1'); }
-      Store.setPref('oscar.cam', $('#cam-show', r).checked ? 'on' : 'off');
+      Store.setPref(key('Name'), $('#ap-name', r).value.trim() || APP_LINKS[k].name);
+      if ($('#ap-pkg', r)) Store.setPref(key('Pkg'), $('#ap-pkg', r).value.trim() || APP_LINKS[k].pkg);
+      if ($('#ap-scheme', r)) Store.setPref(key('Scheme'), $('#ap-scheme', r).value.trim().replace(/:.*$/, '') || APP_LINKS[k].scheme);
+      if ($('#ap-sc', r)) { Store.setPref(key('Shortcut'), $('#ap-sc', r).value.trim()); Store.setPref(key('ShortcutReady'), '1'); }
+      Store.setPref(key(''), $('#ap-show', r).checked ? 'on' : 'off');
     };
-    $('#cam-test', r).onclick = () => { save(); ACT.openCam(); };
-    $('#cam-save', r).onclick = () => { save(); closeSheet(); render(); };
+    $('#ap-test', r).onclick = () => { save(); openApp(k); };
+    $('#ap-save', r).onclick = () => { save(); closeSheet(); render(); };
   });
-};
+}
+ACT.camSettings = () => appSettings('cam');
+ACT.vetAppSettings = () => appSettings('vet');
 
 /* ---------- notifications ---------- */
 ACT.notify = () => {
