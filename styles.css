@@ -35,8 +35,14 @@ h4 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: v
 .pre { white-space: pre-wrap; margin: 0 0 8px; }
 
 #view { max-width: 1000px; margin: 0 auto; padding: 0 16px; padding-top: env(safe-area-inset-top); }
-.cols { display: grid; gap: 0 16px; }
-@media (min-width: 720px) { .cols { grid-template-columns: 1fr 1fr; align-items: start; } }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 16px; }
+/* Grid and flex children default to "never narrower than my content", so one
+   long single-line preview (a vet's comment) stretched the whole page wider
+   than the phone and it zoomed out. Let them shrink and let text wrap. */
+.cols > *, .card, .item, .item-main, .item-main > span, .mcard > span, .tl-t, .check > span, .sheet-card, #sheet-body { min-width: 0; }
+body, .card, .sheet-card, .mcard, .pre, dd, .item-main b, .item-main small { overflow-wrap: anywhere; }
+html, body { overflow-x: hidden; }
+@media (min-width: 720px) { .cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
 
 /* header */
 .hero { display: flex; align-items: center; gap: 12px; padding: 16px 0 12px; }
