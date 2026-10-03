@@ -5,10 +5,11 @@
 const LOG_TYPES = [
   { k: 'pee',      icon: '💧', label: 'Pee',      potty: true },
   { k: 'poop',     icon: '💩', label: 'Poop',     potty: true },
+  { k: 'both',     icon: '💧💩', label: 'Both' },
   { k: 'accident', icon: '⚠️', label: 'Accident', potty: true },
   { k: 'meal',     icon: '🍖', label: 'Meal',     trigger: 20 },
   { k: 'water',    icon: '🥣', label: 'Water',    trigger: 20 },
-  { k: 'sleep',    icon: '😴', label: 'Nap' },
+  { k: 'sleep',    icon: '😴', label: 'Sleep' },
   { k: 'wake',     icon: '☀️', label: 'Awake',    trigger: 5 },
   { k: 'play',     icon: '🎾', label: 'Play',     trigger: 15 },
   { k: 'walk',     icon: '🦮', label: 'Walk' },

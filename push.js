@@ -112,13 +112,13 @@ const Push = (() => {
     if (!auds.length) return;
     const days = []; for (let i = 0; i < 14; i++) { const d = new Date(); d.setDate(d.getDate() + i); days.push(dayKey(d)); }
     const cur = Store.get('pushjwt');
-    if (cur && cur.pub === v.pub && auds.every(a => cur.tokens?.[a]?.[days[7]])) return;   // a week of runway left
+    if (cur && cur.pub === v.pub && cur.v === 2 && auds.every(a => cur.tokens?.[a]?.[days[7]])) return;   // a week of runway left
     const tokens = {};
     for (const a of auds) {
       tokens[a] = {};
-      for (const d of days) tokens[a][d] = await jwt(a, v, Math.floor((parseDay(d).getTime() + 20 * 36e5) / 1000));
+      for (const d of days) tokens[a][d] = await jwt(a, v, Math.floor((parseDay(d).getTime() + 23.5 * 36e5) / 1000));   // good for 8 am through the 9 pm summary
     }
-    await Store.put({ id: 'pushjwt', kind: 'config', pub: v.pub, tokens });
+    await Store.put({ id: 'pushjwt', kind: 'config', pub: v.pub, v: 2, tokens });
   }
 
   /* ---- sending ---- */

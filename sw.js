@@ -54,13 +54,29 @@ self.addEventListener('push', e => {
   e.waitUntil((async () => {
     let d = null;
     try { d = e.data && e.data.text() ? e.data.json() : null; } catch { d = { body: e.data.text() }; }
-    if (!d) d = await healthReminder();          // empty push = the 8 am reminder
+    if (!d) d = (await scheduledMessage()) || await healthReminder();   // empty push = a scheduled one
     await self.registration.showNotification(d.title || 'Puppy Log', {
       body: d.body || 'Something new was added', tag: d.tag || 'oscar', renotify: true,
       icon: 'icon-192.png', badge: 'icon-192.png', data: { url: d.url || './' },
     });
   })());
 });
+
+/* Scheduled notifications (8 am reminder, meal check, 9 pm summary) are built
+   by the bridge from both phones' data; an empty push means "come and get it". */
+async function scheduledMessage() {
+  try {
+    if (indexedDB.databases && !(await indexedDB.databases()).some(x => x.name === 'oscar')) return null;
+    const db = await new Promise((res, rej) => { const r = indexedDB.open('oscar'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    if (!db.objectStoreNames.contains('kv')) { db.close(); return null; }
+    const b = await new Promise(res => { const q = db.transaction('kv').objectStore('kv').get('bridge'); q.onsuccess = () => res(q.result); q.onerror = () => res(null); });
+    db.close();
+    if (!b || !b.u) return null;
+    const r = await fetch(b.u, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ key: b.k, action: 'msg' }) });
+    const j = await r.json();
+    return j.ok && j.msg && Date.now() - j.msg.at < 30 * 6e4 ? j.msg : null;
+  } catch { return null; }
+}
 
 /* Read this phone's own copy of the records and list what's due. Never create
    the database here — an empty one would stop the app setting it up. */

@@ -337,3 +337,11 @@ details summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 .walk-btns { display: flex; gap: 8px; margin-top: 10px; }
 .walk-btns button { flex: 1; background: var(--soft); border-radius: 12px; padding: 11px 4px; font-weight: 650; }
 .walk-btns .primary { background: var(--accent); color: var(--accent-ink); }
+
+.q-rest.on { background: color-mix(in srgb, var(--accent) 16%, var(--card)); }
+.quick button { min-width: 0; }
+.trend { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.trend span { flex: 1; color: var(--muted); font-size: 13.5px; }
+.trend small { width: 74px; text-align: right; color: var(--muted); }
+.trend small.up { color: var(--good); }
+.trend small.down { color: var(--bad); }

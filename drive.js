@@ -49,6 +49,10 @@ const Drive = (() => {
     throw new Error('That isn’t a Puppy Log connection code');
   }
 
+  /* The service worker can't read localStorage, so it gets the bridge from IndexedDB
+     to fetch the text of a scheduled notification (summary, meal reminder). */
+  const shareWithWorker = () => configured() && Store.kvSet('bridge', { u: url(), k: key() }).catch(() => {});
+
   async function connect(text) {
     const { u, k } = parseCode(text);
     const oldU = url(), oldK = key();
@@ -238,6 +242,7 @@ const Drive = (() => {
   async function sync() {
     if (busy) { again = true; return; }
     if (!configured()) { set('off'); return; }
+    shareWithWorker();
     if (!navigator.onLine) { set('offline', 'Offline — saved on this phone'); return; }
     busy = true; set('syncing');
     try {

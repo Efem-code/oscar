@@ -181,6 +181,27 @@ function form({ title, intro = '', fields, value = {}, onSave, onDelete, saveLab
 const hiddenTypes = () => new Set(P().quickHide || []);
 const quickTypes = () => LOG_TYPES.filter(t => !hiddenTypes().has(t.k));
 
+function quickGrid() {
+  const ts = quickTypes(), rest = ts.some(t => t.k === 'sleep') || ts.some(t => t.k === 'wake');
+  const btns = ts.filter(t => t.k !== 'wake').map(t => t.k === 'sleep' ? restButton()
+    : `<button data-act="log" data-k="${t.k}" class="q-${t.k}"><span>${t.icon}</span>${t.k === 'walk' && activeWalk() ? 'End walk' : t.label}</button>`);
+  if (rest && !ts.some(t => t.k === 'sleep')) btns.push(restButton());
+  const cols = [0, 1, 2, 3, 4, 5, 3, 4, 4, 5, 5][btns.length] || 5;
+  return `<section class="quick" style="grid-template-columns: repeat(${cols}, 1fr)">${btns.join('')}</section>`;
+}
+
+/* Sleep: one button that says what it'll do next. */
+const nightTime = () => { const h = new Date().getHours(); return h >= 19 || h < 5; };
+function sleepState() {
+  const e = Store.list('log', r => r.type === 'sleep' || r.type === 'wake')[0];
+  return { asleep: e?.type === 'sleep', night: !!e?.night, since: e?.at };
+}
+function restButton() {
+  const s = sleepState();
+  const [icon, label] = s.asleep ? (s.night ? ['🌅', 'Morning'] : ['☀️', 'Awake']) : (nightTime() ? ['🌙', 'Bedtime'] : ['😴', 'Nap']);
+  return `<button data-act="log" data-k="rest" class="q-rest ${s.asleep ? 'on' : ''}"><span>${icon}</span>${label}</button>`;
+}
+
 /* An open walk is a walk log with no end yet. */
 const activeWalk = () => Store.list('log', r => r.type === 'walk' && r.open)[0];
 
@@ -193,7 +214,18 @@ async function quickLog(type, extra = {}) {
     navigator.vibrate && navigator.vibrate(15);
     return toast(`🦮 Walk started ${fmtTime(rec.at)}`, [{ label: 'Undo', run: () => Store.remove(rec.id) }]);
   }
-  if ((type === 'pee' || type === 'poop') && activeWalk()) extra = { onWalk: activeWalk().id, ...extra };
+  if ((type === 'pee' || type === 'poop' || type === 'both') && activeWalk()) extra = { onWalk: activeWalk().id, ...extra };
+  if (type === 'both') {
+    const at = new Date().toISOString();
+    const a = await Store.put({ kind: 'log', type: 'pee', at, ...extra }), b = await Store.put({ kind: 'log', type: 'poop', at, ...extra });
+    navigator.vibrate && navigator.vibrate(15);
+    return toast(`💧💩 Pee + poop logged ${fmtTime(at)}`, [{ label: 'Undo', run: async () => { await Store.remove(a.id); await Store.remove(b.id); } }]);
+  }
+  if (type === 'rest') {           // the single sleep button: Bedtime/Nap when awake, Morning/Awake when asleep
+    const s = sleepState();
+    if (s.asleep) return quickLog('wake', s.night ? { morning: true } : {});
+    return quickLog('sleep', nightTime() ? { night: true } : {});
+  }
   if (type === 'note') return form({ title: 'Note', fields: [{ k: 'note', label: 'What happened?', type: 'textarea', required: true }, { k: 'at', label: 'When', type: 'datetime' }],
     onSave: v => Store.put({ kind: 'log', type: 'note', note: v.note, at: v.at }) });
   const rec = await Store.put({ kind: 'log', type, ...extra });
@@ -339,6 +371,9 @@ function timelineRow(r) {
   if (r.type === 'accident') detail = [r.what, r.where && 'in ' + r.where.toLowerCase(), r.note].filter(Boolean).join(' · ');
   if (r.type === 'meal') detail = [r.amount, r.ate && 'ate ' + r.ate.toLowerCase(), r.note].filter(Boolean).join(' · ');
   if (r.type === 'walk' && r.minutes) detail = `${r.minutes} min${r.note ? ' · ' + r.note : ''}`;
+  if (r.type === 'walk' && r.open) detail = 'out now';
+  if (r.type === 'sleep' && r.night) detail = 'bedtime' + (r.note ? ' · ' + r.note : '');
+  if (r.type === 'wake' && r.morning) detail = 'morning' + (r.note ? ' · ' + r.note : '');
   return `<button class="tl ${r.type}" data-act="editLog" data-id="${r.id}">
     <time>${fmtTime(r.at)}</time><span class="ico">${t.icon}</span>
     <span class="tl-t"><b>${esc(t.label)}</b>${detail ? `<small>${esc(detail)}</small>` : ''}</span>
@@ -396,7 +431,7 @@ VIEWS.today = () => {
     ${P().homeDay && daysUntil(P().homeDay) > 0 && !Store.list('log').length ? '' : countdownCard()}
     ${whoLine()}
     ${walkCard()}
-    <section class="quick" style="grid-template-columns: repeat(${[0, 1, 2, 3, 4, 5, 3, 4, 4, 5, 5][quickTypes().length] || 5}, 1fr)">${quickTypes().map(t => `<button data-act="log" data-k="${t.k}" class="q-${t.k}"><span>${t.icon}</span>${t.k === 'walk' && activeWalk() ? 'End walk' : t.label}</button>`).join('')}</section>
+    ${quickGrid()}
     ${appCfg('cam').on ? `<button class="cam-btn" data-act="openCam">📹 Check on ${esc(App.pet())} <span class="muted small">${esc(camName())}</span></button>` : ''}
     <section class="capture">
       <button data-act="capture" data-k="photo">📷 Photo</button>
@@ -495,6 +530,7 @@ VIEWS.grow = () => {
       <ul>${breedNotes().tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details></section>` : ''}
     <section class="card"><div class="h-row"><h3>Training</h3><button class="pill" data-act="addSkill">+ Skill</button></div>
       <div class="skills">${skillList().map(skillCard).join('')}</div></section>
+    ${trendsCard()}
     ${pottyStats()}
     </div><div>
     <section class="card"><h3>Socialization</h3>
@@ -534,6 +570,39 @@ function socialCat(cat, items) {
       return `<button class="chip ${rs.length ? 'on' : ''}" data-act="social" data-item="${esc(i)}">${face} ${esc(i)}${rs.length > 1 ? ` ×${rs.length}` : ''}</button>`;
     }).join('')}</div>` : ''}
   </div>`;
+}
+
+/* This week vs last: the numbers that show whether things are getting easier. */
+function weekStats(endMs) {
+  const start = endMs - 7 * 864e5;
+  const logs = Store.list('log', r => T(r.at) >= start && T(r.at) < endMs);
+  const n = t => logs.filter(r => r.type === t).length;
+  const potty = logs.filter(r => r.type === 'pee' || r.type === 'poop' || r.type === 'accident').reverse();
+  const gaps = [];
+  for (let i = 1; i < potty.length; i++) { const g = (T(potty[i].at) - T(potty[i - 1].at)) / 6e4; if (g >= 15 && g <= 360) gaps.push(g); }
+  let sleep = 0;
+  for (let d = 0; d < 7; d++) sleep += daySummary(dayKey(new Date(start + (d + 0.5) * 864e5))).sleepH;
+  const outside = n('pee') + n('poop');
+  return { accidents: n('accident'), outsidePct: outside + n('accident') ? Math.round(100 * outside / (outside + n('accident'))) : null,
+    gap: gaps.length ? median(gaps) : null, walkMin: logs.filter(r => r.type === 'walk').reduce((a, r) => a + (Number(r.minutes) || 0), 0),
+    sleepH: sleep / 7, meals: n('meal'), logged: logs.length };
+}
+function trendsCard() {
+  const now = Date.now(), a = weekStats(now), b = weekStats(now - 7 * 864e5);
+  if (!a.logged) return '';
+  const row = (label, cur, prev, fmt, better) => {
+    if (cur != null && prev != null && Math.abs(cur) < 0.05 && Math.abs(prev) < 0.05 && label.startsWith('Sleep')) return '';
+    const has = cur != null, raw = has && prev != null ? cur - prev : null, d = raw != null && Math.abs(raw) < 0.05 ? 0 : raw;
+    const good = d == null || d === 0 ? '' : (better === 'up' ? d > 0 : d < 0) ? 'up' : 'down';
+    return `<div class="trend"><span>${label}</span><b>${has ? fmt(cur) : '—'}</b><small class="${good}">${d == null || !b.logged ? '' : d === 0 ? 'same' : (d > 0 ? '▲ ' : '▼ ') + fmt(Math.abs(d))}</small></div>`;
+  };
+  return `<section class="card"><h3>📈 This week vs last</h3>
+    ${row('Accidents', a.accidents, b.accidents, x => String(x), 'down')}
+    ${row('Outside', a.outsidePct, b.outsidePct, x => x + '%', 'up')}
+    ${row('Time between breaks', a.gap, b.gap, x => fmtMin(x), 'up')}
+    ${row('Walking', a.walkMin, b.walkMin, x => fmtMin(x), 'up')}
+    ${row('Sleep a day', a.sleepH, b.sleepH, x => x.toFixed(1) + ' h', 'up')}
+    <p class="muted small">Longer gaps between potty breaks mean his bladder control is growing.</p></section>`;
 }
 
 function pottyStats() {
@@ -793,7 +862,7 @@ ACT.claimFromVet = d => {
 const foodFields = [
   { type: 'row', fields: [{ k: 'brand', label: 'Brand', required: true }, { k: 'product', label: 'Product' }] },
   { type: 'row', fields: [{ k: 'perMeal', label: 'Per meal', ph: 'e.g. ½ cup' }, { k: 'mealsPerDay', label: 'Meals / day', type: 'number' }] },
-  { k: 'times', label: 'Meal times', ph: 'e.g. 7am, 12pm, 5pm' },
+  { k: 'times', label: 'Meal times', ph: 'e.g. 7am, 12pm, 5pm', hint: 'a reminder goes to both phones if a meal isn’t logged by then' },
   { k: 'treats', label: 'Treats & chews', ph: 'what’s allowed' },
   { k: 'day', label: 'Started', type: 'date' },
   { k: 'notes', label: 'Notes', type: 'textarea', rows: 2, ph: 'transition plan, reactions, allergies' }];

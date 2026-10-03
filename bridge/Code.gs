@@ -147,6 +147,10 @@ const ACTIONS = {
   reminders: q => ({ result: dailyReminders(!!q.dry) }),
   setupReminders: () => ({ result: setupReminders() }),
 
+  /* The text of the latest scheduled notification, for the phones' service workers. */
+  msg: () => ({ msg: JSON.parse(PropertiesService.getScriptProperties().getProperty('msg') || 'null') }),
+  summaryNow: q => ({ result: eveningSummary(!!q.dry) }),
+
   trash: q => { DriveApp.getFileById(q.id).setTrashed(true); return {}; },
 };
 
@@ -170,32 +174,129 @@ function loadRecs_() {
   return map;
 }
 
-function dailyReminders(dry) {
-  const recs = loadRecs_(), tz = Session.getScriptTimeZone();
-  const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-  const tomorrow = Utilities.formatDate(new Date(Date.now() + 864e5), tz, 'yyyy-MM-dd');
-  const due = Object.keys(recs).map(k => recs[k]).filter(r => !r.deleted && !r.done && r.due && ((r.kind === 'health' && r.due <= tomorrow) || (r.kind === 'lesson' && (r.due === today || r.due === tomorrow)))
-    || (r.kind === 'appt' && !r.deleted && !r.visitId && !r.cancelled && (r.day === today || r.day === tomorrow)));
-  if (!due.length) return 'nothing due';
-  const v = recs.vapid, tok = recs.pushjwt;
+
+/* ---- scheduled notifications ----
+   The phones pre-sign one push token per day (the script can't do P-256), so
+   every notification is an empty push; the phone's service worker then asks
+   for the text with the `msg` action. */
+const TZ_ = () => Session.getScriptTimeZone();
+const day_ = (d) => Utilities.formatDate(d || new Date(), TZ_(), 'yyyy-MM-dd');
+const all_ = recs => Object.keys(recs).map(k => recs[k]).filter(r => !r.deleted);
+
+function sendAll_(msg, dry) {
+  const recs = loadRecs_(), v = recs.vapid, tok = recs.pushjwt, today = day_();
   if (!v || !tok || tok.pub !== v.pub) return 'no push tokens yet';
-  const subs = Object.keys(recs).map(k => recs[k]).filter(r => r.kind === 'pushsub' && !r.deleted && r.vapidPub === v.pub);
+  if (dry) return 'would send: ' + msg.title + ' — ' + msg.body;
+  msg.at = Date.now();
+  PropertiesService.getScriptProperties().setProperty('msg', JSON.stringify(msg));
   const out = [];
-  subs.forEach(s => {
+  all_(recs).filter(r => r.kind === 'pushsub' && r.vapidPub === v.pub).forEach(s => {
     const aud = s.endpoint.match(/^https:\/\/[^/]+/)[0], jwt = tok.tokens && tok.tokens[aud] && tok.tokens[aud][today];
     if (!jwt) { out.push(s.name + ': no token for ' + today); return; }
-    if (dry) { out.push(s.name + ': would send (' + due.length + ' due)'); return; }
     const r = UrlFetchApp.fetch(s.endpoint, { method: 'post', payload: '', muteHttpExceptions: true,
-      headers: { Authorization: 'vapid t=' + jwt + ', k=' + v.pub, TTL: '43200', Urgency: 'normal' } });
+      headers: { Authorization: 'vapid t=' + jwt + ', k=' + v.pub, TTL: '3600', Urgency: 'high' } });
     out.push(s.name + ': ' + r.getResponseCode());
   });
   return out.join('; ') || 'no phones subscribed';
 }
 
+const clock_ = t => { if (!t) return ''; const p = t.split(':').map(Number); return ((p[0] + 11) % 12 + 1) + ':' + ('0' + p[1]).slice(-2) + (p[0] < 12 ? ' am' : ' pm'); };
+
+/* 8 am: appointments, classes and health items due today/tomorrow (or overdue). */
+function morningMessage_(recs) {
+  const today = day_(), tomorrow = day_(new Date(Date.now() + 864e5)), rs = all_(recs);
+  const pet = (recs.profile || {}).name || 'Your puppy';
+  const when = d => d < today ? 'overdue' : d === today ? 'today' : 'tomorrow';
+  const appts = rs.filter(r => r.kind === 'appt' && !r.visitId && !r.cancelled && (r.day === today || r.day === tomorrow)).sort((a, b) => (a.day + (a.time || '')) < (b.day + (b.time || '')) ? -1 : 1);
+  const lessons = rs.filter(r => r.kind === 'lesson' && !r.done && (r.due === today || r.due === tomorrow)).sort((a, b) => a.due < b.due ? -1 : 1);
+  const due = rs.filter(r => r.kind === 'health' && !r.done && r.due && r.due <= tomorrow).sort((a, b) => a.due < b.due ? -1 : 1);
+  const also = due.length ? '\nAlso: ' + due.length + ' health item' + (due.length > 1 ? 's' : '') + ' due' : '';
+  if (appts.length) { const a = appts[0];
+    return { title: '📅 ' + pet + ': ' + (a.reason || a.type || 'Appointment') + ' ' + when(a.day) + (a.time ? ' at ' + clock_(a.time) : ''),
+      body: [a.clinic, a.vet && 'with ' + a.vet, a.bring && 'Bring/ask: ' + a.bring].filter(Boolean).join(' · ') + also, tag: 'appt', url: './#health' }; }
+  if (lessons.length) { const l = lessons[0], c = recs[l.classId] || {};
+    return { title: '🎓 ' + (c.name || 'Training class') + ' ' + when(l.due) + ((l.time || c.time) ? ' at ' + clock_(l.time || c.time) : ''),
+      body: [c.place, c.trainer && 'with ' + c.trainer, c.bring && 'Bring: ' + c.bring].filter(Boolean).join(' · ') + also, tag: 'class', url: './#grow' }; }
+  if (due.length) return { title: '💉 ' + pet + ': ' + (due.length === 1 ? due[0].name + ' due ' + when(due[0].due) : due.length + ' health items due'),
+    body: due.slice(0, 4).map(r => r.name + ' — ' + when(r.due)).join('\n'), tag: 'health', url: './#health' };
+  return null;
+}
+
+function dailyReminders(dry) {
+  const m = morningMessage_(loadRecs_());
+  return m ? sendAll_(m, dry) : 'nothing due';
+}
+
+/* Meal times from the current food plan, e.g. "7am, 12pm, 5:30 pm" or "07:00, 17:00". */
+function mealTimes_(recs) {
+  const food = all_(recs).filter(r => r.kind === 'food').sort((a, b) => a.at < b.at ? 1 : -1)[0];
+  if (!food || !food.times) return [];
+  const out = [], re = /(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?/gi; let m;
+  while ((m = re.exec(food.times))) {
+    let h = Number(m[1]); const min = Number(m[2] || 0), ap = (m[3] || '').toLowerCase();
+    if (ap.charAt(0) === 'p' && h < 12) h += 12;
+    if (ap.charAt(0) === 'a' && h === 12) h = 0;
+    if (h < 24 && min < 60) out.push(('0' + h).slice(-2) + ':' + ('0' + min).slice(-2));
+  }
+  return out;
+}
+
+/* Local wall-clock time today in the script's time zone, as a Date. */
+function at_(hhmm) {
+  const off = Utilities.formatDate(new Date(), TZ_(), 'XXX');
+  return new Date(day_() + 'T' + hhmm + ':00' + off);
+}
+
+/* 5 am: schedule today's one-off checks (meals, 9 pm summary). One-off triggers
+   linger after firing, so yesterday's are cleared first. */
+function planDay() {
+  ScriptApp.getProjectTriggers().forEach(t => { if (['mealCheck', 'eveningSummary'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
+  const times = mealTimes_(loadRecs_()), now = Date.now(), planned = [];
+  times.forEach(t => { const when = at_(t).getTime() + 30 * 6e4; if (when > now) { ScriptApp.newTrigger('mealCheck').timeBased().at(new Date(when)).create(); planned.push(t); } });
+  if (at_('21:00').getTime() > now) ScriptApp.newTrigger('eveningSummary').timeBased().at(at_('21:00')).create();
+  PropertiesService.getScriptProperties().setProperty('meals', JSON.stringify(times));
+  return 'meals ' + (planned.join(', ') || 'none left today') + ' · summary 9 pm';
+}
+
+/* Half an hour after each meal time: nudge both phones if nobody logged it. */
+function mealCheck() {
+  const recs = loadRecs_(), now = Date.now();
+  const times = mealTimes_(recs).map(t => ({ t: t, ms: at_(t).getTime() })).filter(x => x.ms <= now).sort((a, b) => b.ms - a.ms);
+  if (!times.length) return 'no meal due';
+  const slot = times[0];
+  const fed = all_(recs).some(r => r.kind === 'log' && r.type === 'meal' && new Date(r.at).getTime() >= slot.ms - 90 * 6e4);
+  if (fed) return 'fed';
+  const pet = (recs.profile || {}).name || 'Your puppy';
+  return sendAll_({ title: '🍖 ' + pet + '’s ' + clock_(slot.t) + ' meal', body: 'Nobody has logged it yet — tap Meal once he’s fed.', tag: 'meal', url: './#today' });
+}
+
+/* 9 pm: the day in one line, sent to both phones. */
+function eveningSummary(dry) {
+  const recs = loadRecs_(), today = day_(), rs = all_(recs);
+  const logs = rs.filter(r => r.kind === 'log' && day_(new Date(r.at)) === today);
+  if (!logs.length) return 'nothing logged today';
+  const n = t => logs.filter(r => r.type === t).length;
+  const walks = logs.filter(r => r.type === 'walk'), walkMin = walks.reduce((a, r) => a + (Number(r.minutes) || 0), 0);
+  const ev = rs.filter(r => r.kind === 'log' && (r.type === 'sleep' || r.type === 'wake')).sort((a, b) => a.at < b.at ? -1 : 1);
+  const start = at_('00:00').getTime(), end = Date.now(); let sleep = 0, from = null;
+  ev.forEach(e => { const t = new Date(e.at).getTime();
+    if (e.type === 'sleep' && from === null) from = t;
+    else if (e.type === 'wake' && from !== null) { sleep += Math.max(0, Math.min(t, end) - Math.max(from, start)); from = null; } });
+  if (from !== null) sleep += Math.max(0, end - Math.max(from, start));
+  const food = rs.filter(r => r.kind === 'food').sort((a, b) => a.at < b.at ? 1 : -1)[0];
+  const pet = (recs.profile || {}).name || 'Your puppy';
+  const bits = ['💧 ' + n('pee'), '💩 ' + n('poop'), (n('accident') ? '⚠️ ' + n('accident') + ' accident' + (n('accident') > 1 ? 's' : '') : '✅ no accidents'),
+    '🍖 ' + n('meal') + (food && food.mealsPerDay ? '/' + food.mealsPerDay : '') + ' meals',
+    walks.length ? '🦮 ' + walks.length + ' walk' + (walks.length > 1 ? 's' : '') + (walkMin ? ' (' + walkMin + ' min)' : '') : '',
+    sleep ? '😴 ' + (sleep / 36e5).toFixed(1) + ' h sleep' : ''].filter(Boolean);
+  return sendAll_({ title: '🌙 ' + pet + '’s day', body: bits.join(' · '), tag: 'summary', url: './#today' }, dry);
+}
+
 function setupReminders() {
-  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyReminders') ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(t => { if (['dailyReminders', 'planDay'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('dailyReminders').timeBased().everyDays(1).atHour(8).create();
-  return 'daily at 8 (' + Session.getScriptTimeZone() + ')';
+  ScriptApp.newTrigger('planDay').timeBased().everyDays(1).atHour(5).create();
+  return 'reminders 8 am, planner 5 am (' + TZ_() + ') · today: ' + planDay();
 }
 
 /* Run this once from the editor (select "authorize" → Run) if Deploy doesn't
