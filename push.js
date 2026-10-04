@@ -99,10 +99,16 @@ const Push = (() => {
 
   /* If the synced key changed under us (both phones made one at once), re-subscribe quietly. */
   async function check() {
+    /* Re-register quietly if this phone's registration has gone missing or changed —
+       e.g. the browser's site data was cleared — or the synced key changed. */
     const mine = Store.get(myId()), v = Store.get('vapid');
-    if (!mine || !v || mine.vapidPub === v.pub || !supported() || Notification.permission !== 'granted') return;
+    if (!mine || !v || !supported() || Notification.permission !== 'granted') return;
+    let sub = null;
+    try { sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription(); } catch {}
+    if (mine.vapidPub === v.pub && sub && sub.endpoint === mine.endpoint) return;
     try { await enable(); } catch {}
   }
+
 
   /* Tokens for the 8 am reminder, signed ahead of time (the script can't sign).
      One per push service per day; each expires that evening. */
