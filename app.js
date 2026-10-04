@@ -377,6 +377,7 @@ function timelineRow(r) {
   if (r.type === 'walk' && r.open) detail = 'out now';
   if (r.type === 'sleep' && r.night) detail = 'bedtime' + (r.note ? ' · ' + r.note : '');
   if (r.type === 'wake' && r.morning) detail = 'morning' + (r.note ? ' · ' + r.note : '');
+  if (r.type === 'ask') detail = [(r.signs || []).map(s => SIGN[s]?.label.toLowerCase()).filter(Boolean).join(', '), NEEDS[r.need] && '→ ' + NEEDS[r.need].label.toLowerCase(), r.note].filter(Boolean).join(' ');
   return `<button class="tl ${r.type}" data-act="editLog" data-id="${r.id}">
     <time>${fmtTime(r.at)}</time><span class="ico">${t.icon}</span>
     <span class="tl-t"><b>${esc(t.label)}</b>${detail ? `<small>${esc(detail)}</small>` : ''}</span>
@@ -435,6 +436,7 @@ VIEWS.today = () => {
     ${whoLine()}
     ${walkCard()}
     ${quickGrid()}
+    ${askButton()}
     ${appCfg('cam').on ? `<button class="cam-btn" data-act="openCam">📹 Check on ${esc(App.pet())} <span class="muted small">${esc(camName())}</span></button>` : ''}
     <section class="capture">
       <button data-act="capture" data-k="photo">📷 Photo</button>

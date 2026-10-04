@@ -372,3 +372,25 @@ ol.steps li { margin-bottom: 6px; }
 .reel-stage { background: #000; border-radius: 12px; aspect-ratio: 9/16; max-height: 60vh; margin: 0 auto; display: grid; place-items: center; overflow: hidden; }
 .reel-stage video { width: 100%; height: 100%; object-fit: contain; }
 .reel-stage .spin { color: #fff; }
+
+/* What does he want? */
+.ask-btn { border-color: var(--accent); }
+.ask-signs { margin: 10px 0 14px; }
+.ask-r { border: 1px solid var(--line); background: var(--card); border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+.ask-r.top { border-color: var(--accent); }
+.ask-h { display: flex; align-items: center; gap: 8px; }
+.ask-h .ico { font-size: 22px; }
+.ask-h b { flex: 1; }
+.ask-tag { font-size: 11px; font-weight: 700; color: var(--good); border: 1px solid var(--good); border-radius: 99px; padding: 1px 7px; }
+.ask-bar { height: 5px; background: var(--soft); border-radius: 99px; margin: 8px 0; overflow: hidden; }
+.ask-bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.ask-why { margin: 0 0 6px; padding-left: 18px; font-size: 13px; color: var(--muted); }
+.ask-tip { font-size: 14px; margin: 6px 0 8px; }
+.ask-r .btns { margin-top: 4px; }
+.ask-other { margin: 10px 0; }
+.ask-other summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.ask-other .chips { margin-top: 8px; }
+.ask-pat { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.ask-pat small { color: var(--muted); margin-left: 4px; }
+.ask-bl dt { font-weight: 600; margin-top: 8px; font-size: 13.5px; }
+.ask-bl dd { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
