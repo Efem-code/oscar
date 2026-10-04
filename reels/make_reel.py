@@ -139,15 +139,21 @@ def plan_day(day, recs, local):
     for r in pics:
         items.append({'rec': r, 'path': local[r['driveId']], 'video': False, 'len': PHOTO, 'score': (6 if r.get('star') else 0) + (2 if r.get('portrait') else 0)})
 
-    # Hook: the liveliest (or starred) video; then fill to ~18 s by score; then tell the day in order.
+    # Hook: the liveliest (or starred) video. Then fill to ~18 s by score — but when
+    # there are photos, cap videos at 5 so the day's pictures make it in too.
     items.sort(key=lambda x: -x['score'])
     hook = next((x for x in items if x['video']), items[0])
-    chosen, total = [hook], hook['len']
+    have_pics = sum(1 for x in items if not x['video']) >= 3
+    max_vids = 5 if have_pics else 99
+    chosen, total, nv = [hook], hook['len'], 1 if hook['video'] else 0
     for x in items:
         if x is hook or total >= TARGET[1] - 1:
             continue
+        if x['video'] and nv >= max_vids:
+            continue
         chosen.append(x)
         total += x['len']
+        nv += 1 if x['video'] else 0
     if total < 8:
         return None, f'only {total:.0f} s of usable footage'
     rest = sorted(chosen[1:], key=lambda x: x['rec']['at'])
