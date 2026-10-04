@@ -225,3 +225,25 @@ const BEHAVIOUR = [
     vet: 'Call the vet if he skips food for more than a day, or if poor appetite comes with vomiting, diarrhoea, low energy, weight loss, or straining to eat.',
   },
 ];
+
+/* The Oscar brand, for @kpuposcar — the plan the nightly reels follow. */
+const BRAND = {
+  handle: '@kpuposcar',
+  bio: 'Oscar 🐾 Korean Jindo · daily diary of a stubborn, loyal, very fluffy boy · BC 🇨🇦',
+  pillars: [
+    ['📓 Oscar’s Diary', 'The nightly reel — day-by-day life. The series people follow for.'],
+    ['🌱 Growing up', 'The weekly portrait in the same spot. “Week 40 vs week 52” is the most shareable format there is.'],
+    ['🎓 Training wins', 'First recall, first sit-stay at a café. Short, celebratory, “we did it”.'],
+    ['🐕 Jindo facts', 'Quirks of the breed (escape artist, cat-like grooming, loyal to one person). Viewers learn something → they share.'],
+    ['😂 Oscar being Oscar', 'Zoomies, stubborn moments, funny sleeping positions. Pure personality.'],
+  ],
+  rhythm: [
+    'Post 3–4 reels a week rather than every day — the best Diary days, not every day.',
+    'Best times to try: 7–9 pm on weekdays, late morning on weekends. Check your Insights after a few weeks and follow your own numbers.',
+    'Always add a trending sound in Instagram (keep Oscar’s own sound low underneath).',
+    'Reply to every comment in the first hour — it’s the strongest early signal for reach.',
+    'Use 3–5 hashtags that fit the post, not 30 — mix one big (#puppiesofinstagram) with niche (#koreanjindo, #jindosofinstagram).',
+    'Collaborate: tag the trainer, the vet clinic, the shops you visit — they often reshare.',
+  ],
+  look: 'Terracotta + cream, Futura bold titles, warm colour, soft crossfades, “DAY n” badge, the paw end card. Same every time — that’s what makes it a brand.',
+};

@@ -160,6 +160,34 @@ def plan_day(day, recs, local):
     return [hook] + rest, None
 
 
+LABELS = {'walk': 'walk time', 'sleep': 'nap o\u2019clock', 'meal': 'dinner', 'play': 'zoomies', 'train': 'training',
+          'accident': 'oops', 'wake': 'just woke up', 'note': ''}
+
+
+def clip_label(rec, recs):
+    """A short creator-style label for a clip: the user's caption if they wrote one,
+    else what was happening in the logs within ~20 minutes."""
+    if rec.get('caption') and len(rec['caption']) <= 28:
+        return rec['caption'].lower()
+    t = datetime.fromisoformat(rec['at'].replace('Z', '+00:00'))
+    best, gap = None, 20 * 60
+    for r in recs.values():
+        if r.get('deleted') or r.get('kind') not in ('log', 'train', 'lesson'):
+            continue
+        k = 'train' if r['kind'] in ('train', 'lesson') else r.get('type')
+        if k not in LABELS or not LABELS[k]:
+            continue
+        try:
+            d = abs((datetime.fromisoformat((r.get('at') or '').replace('Z', '+00:00')) - t).total_seconds())
+        except ValueError:
+            continue
+        if d < gap:
+            best, gap = k, d
+    if best == 'meal':
+        return 'breakfast' if t.astimezone(TZ).hour < 11 else 'dinner'
+    return LABELS.get(best) or None
+
+
 def day_facts(day, recs):
     p = recs.get('profile', {})
     home = p.get('homeDay')
@@ -172,6 +200,24 @@ def day_facts(day, recs):
     breed = p.get('breed') or 'puppy'
     return {'name': p.get('name') or 'Oscar', 'n': n, 'breed': 'Korean Jindo' if 'jindo' in breed.lower() else breed,
             'walks': c('walk'), 'accidents': c('accident'), 'logged': len(logs), 'milestones': ms, 'classes': [x for x in classes if x]}
+
+
+def creator_hook(f, day):
+    """The line under the DAY badge — written to stop the scroll. Rotates by date
+    so the series doesn't repeat itself; a milestone always wins."""
+    if f['milestones']:
+        return f['milestones'][0], False
+    random.seed('hook' + day)
+    b, n, name = f['breed'], f['n'], f['name']
+    options = [
+        (f'POV: you brought home a {b}', False),
+        (f'raising a stubborn {b}', False),
+        (f'rate {name}\u2019s day 1\u201310', False),
+        ('wait for the last clip\u2026', True),
+        (f'things my {b.split()[-1]} did today', False),
+        (f'{name} has been home {n} days' if n else f'a day with {name}', False),
+    ]
+    return random.choice(options)
 
 
 def hook_text(f, day):
@@ -198,7 +244,15 @@ def caption(f):
     lines = [head]
     if bits:
         lines.append(' · '.join(bits).capitalize())
-    lines.append(f"Follow along as our {f['breed']} grows up!")
+    random.seed('cta' + str(f.get('n')))
+    lines.append(random.choice([
+        'Send this to someone who needs a Jindo in their life 🐾',
+        'What should we teach him next? 👇',
+        'Rate his day 1–10 👇',
+        'Tag someone who’d spoil him rotten 🐶',
+        'Which clip is the most Oscar? 👇',
+    ]))
+    lines.append(f"New day of {f['name']}'s Diary most nights — follow {HANDLE} 🐾")
     return '\n'.join(lines)
 
 
@@ -221,7 +275,31 @@ def upright(path, out):
     return out
 
 
+def label_png(text, path):
+    from PIL import Image, ImageDraw
+    img = Image.new('RGBA', (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(img)
+    f = _font(F_DISPLAY, 92); tw = d.textlength(text, font=f)
+    while tw > W - 160: f = _font(F_DISPLAY, f.size - 6); tw = d.textlength(text, font=f)
+    x, y = (W - tw) / 2, H * 0.66
+    asc, desc = f.getmetrics()
+    d.rounded_rectangle([x - 34, y - 10, x + tw + 34, y + asc + desc + 6], radius=30, fill=CREAM + (235,))
+    d.text((x, y), text, font=f, fill=TERRA)
+    img.save(path)
+
+
 def render_segment(x, out):
+    if x.get('label'):
+        lp = out + '.label.png'
+        label_png(x['label'].upper(), lp)
+        base = out + '.base.mp4'
+        _render_segment(x, base)
+        run([FFMPEG, '-y', '-v', 'error', '-i', base, '-i', lp, '-filter_complex', "[0:v][1:v]overlay=0:0:enable='gt(t,0.25)'[v]",
+             '-map', '[v]', '-map', '0:a', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-c:a', 'copy', out])
+        return
+    _render_segment(x, out)
+
+
+def _render_segment(x, out):
     d = f"{x['len']:.2f}"
     common = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p', '-r', str(FPS),
               '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2', '-shortest', out]
@@ -400,7 +478,20 @@ def main():
         return
     tmp_out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out', f'{day} reel.mp4') if preview else os.path.join(tempfile.gettempdir(), f'oscar-reel-{day}.mp4')
     os.makedirs(os.path.dirname(tmp_out), exist_ok=True)
-    badge = (f"DAY {f['n']}", (f['milestones'][0] if f['milestones'] else f"with a {f['breed']}")) if f['n'] else None
+    hook_line, wait = creator_hook(f, day)
+    if wait and len(items) > 3:                       # save the second-liveliest moment for the end
+        rest = items[1:]
+        star = max(rest, key=lambda x: x.get('score', 0) if x['video'] else -1)
+        if star['video']:
+            items = [items[0]] + [x for x in rest if x is not star] + [star]
+    for x in items[1:]:
+        x['label'] = clip_label(x['rec'], recs)
+    # one label per moment: drop repeats of the previous clip's label
+    prev = None
+    for x in items[1:]:
+        if x['label'] == prev: x['label'] = None
+        else: prev = x['label']
+    badge = (f"DAY {f['n']}", hook_line) if f['n'] else (hook_line, '')
     total = render(items, lines, tmp_out, badge=badge, tag=f"{f['name'].upper()}'S DIARY" + (f" · DAY {f['n']}" if f['n'] else ''), name=f['name'])
     if preview:
         log(f'preview: {total:.1f} s → {tmp_out}')
@@ -417,7 +508,7 @@ def main():
             try: bridge.call('trash', id=gone)
             except Exception: pass
     rec = dict(old, id=f'reel-{day}', kind='reel', at=f'{day}T19:00:00.000Z',
-               title=' '.join(l for l in lines if l), caption=cap, tags=TAGS, duration=round(total, 1), clips=len(items),
+               title=' — '.join(x for x in (badge or (hook_line, '')) if x), caption=cap, tags=TAGS, duration=round(total, 1), clips=len(items),
                driveId=vid, thumbId=tid, posted=old.get('posted', False))
     rec.setdefault('created', bridge.now_iso()); rec.setdefault('shard', day[:7]); rec.setdefault('author', 'Claude')
     bridge.save([rec])

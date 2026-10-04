@@ -890,6 +890,7 @@ VIEWS.more = () => {
       ${wishes().length ? '<button class="link" data-act="wishCopy">Copy list</button>' : ''}
     </section>
     <section class="card"><h3>Share & export</h3>
+      <button class="item-main block" data-act="brand"><span class="ico">📣</span><span><b>Oscar brand kit</b><small>${esc(BRAND.handle)} — content pillars, posting rhythm, bio</small></span></button>
       <button class="item-main block" data-act="book"><span class="ico">📖</span><span><b>${esc(App.pet())}’s photo book</b><small>Portraits, milestones and favourites as a printable book (PDF)</small></span></button>
       <button class="item-main block" data-act="prep"><span class="ico">🏠</span><span><b>Getting-ready checklist</b><small>${prepItems().done}/${prepItems().total} done</small></span></button>
       <button class="item-main block" data-act="careSheet"><span class="ico">📋</span><span><b>Care sheet</b><small>One page for a sitter, groomer or new vet — print or share</small></span></button>
@@ -1663,6 +1664,16 @@ ACT.quickSettings = () => {
     };
   });
 };
+
+/* ---------- brand kit ---------- */
+ACT.brand = () => sheet(`<h2>📣 Oscar brand kit</h2>
+  <p class="muted">The plan the nightly reels follow for ${esc(BRAND.handle)}.</p>
+  <h4>Bio</h4><p class="pre">${esc(BRAND.bio)}</p><button class="link" id="br-bio">Copy bio</button>
+  <h4>Content pillars</h4>${BRAND.pillars.map(([t, d]) => `<p><b>${esc(t)}</b><br><span class="muted small">${esc(d)}</span></p>`).join('')}
+  <h4>Posting rhythm</h4><ul>${BRAND.rhythm.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+  <h4>The look</h4><p class="muted">${esc(BRAND.look)}</p>`, r => {
+  $('#br-bio', r).onclick = async () => { try { await navigator.clipboard.writeText(BRAND.bio); toast('Bio copied'); } catch { toast('Copy failed'); } };
+});
 
 /* ---------- notifications ---------- */
 ACT.notify = () => {
