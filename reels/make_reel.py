@@ -115,8 +115,13 @@ def fetch(path, tries=12):
 def plan_day(day, recs, local):
     """Pick and order tonight's clips. Returns (items, facts) or (None, reason)."""
     media = [r for r in recs.values() if r.get('kind') == 'media' and not r.get('deleted') and not r.get('doc')
-             and not r.get('noReel') and r.get('driveId') in local and local_day(r['at']) == day]
-    media = [r for r in media if fetch(local[r['driveId']])]
+             and not r.get('noReel') and r.get('driveId') and local_day(r['at']) == day]
+    for r in media:                                   # fetch from Drive (cached for re-runs)
+        try:
+            local[r['driveId']] = bridge.download(r['driveId'], os.path.splitext(r.get('name') or '')[1].lower())
+        except Exception as e:
+            log('could not fetch', r.get('name'), e)
+    media = [r for r in media if r['driveId'] in local]
     vids = [r for r in media if r.get('video')]
     pics = [r for r in media if not r.get('video')]
     if not ((len(media) >= 3 and vids) or len(pics) >= 5):
@@ -290,7 +295,8 @@ def main():
     day = args[0] if args else datetime.now(TZ).date().isoformat()
     log('reel for', day)
     recs, _ = bridge.records()
-    local = bridge.local_media()
+    local = {}
+    bridge.prune_cache()
     items, why = plan_day(day, recs, local)
     if not items:
         log('skipping:', why)
@@ -309,21 +315,23 @@ def main():
         log(f'preview: {total:.1f} s → {tmp_out}')
         print(cap + '\n\n' + TAGS)
         return
-    os.makedirs(REELS, exist_ok=True)
-    out = os.path.join(REELS, f'{day} {f["name"]} reel.mp4')
-    shutil.copyfile(tmp_out, out)                  # into Drive — it uploads from here
-    thumb = os.path.join(THUMBS, f'reel-thumb-{day}.jpg')
+    old = recs.get(f'reel-{day}', {})
+    thumb = tmp_out + '.jpg'
     run([FFMPEG, '-y', '-v', 'error', '-ss', '1.0', '-i', tmp_out, '-frames:v', '1', '-vf', 'scale=360:-2', thumb])
-    log(f'rendered {total:.1f} s → {out}; waiting for Drive to upload…')
-    vid, tid = wait_for_id(out), wait_for_id(thumb)
-    if not vid:
-        log('Drive has not uploaded it yet — the app will get it on the next run')
-        return
-    rec = dict(recs.get(f'reel-{day}', {}), id=f'reel-{day}', kind='reel', at=f'{day}T19:00:00.000Z',
+    log(f'rendered {total:.1f} s; uploading…')
+    vid = bridge.upload(tmp_out, f'{day} {f["name"]} reel.mp4', 'video/mp4', 'reel')
+    tid = bridge.upload(thumb, f'reel-thumb-{day}.jpg', 'image/jpeg', 'thumb')
+    for gone in (old.get('driveId'), old.get('thumbId')):          # replace an earlier version of tonight's reel
+        if gone and gone not in (vid, tid):
+            try: bridge.call('trash', id=gone)
+            except Exception: pass
+    rec = dict(old, id=f'reel-{day}', kind='reel', at=f'{day}T19:00:00.000Z',
                title=' '.join(l for l in lines if l), caption=cap, tags=TAGS, duration=round(total, 1), clips=len(items),
-               driveId=vid, thumbId=tid, posted=recs.get(f'reel-{day}', {}).get('posted', False))
+               driveId=vid, thumbId=tid, posted=old.get('posted', False))
     rec.setdefault('created', bridge.now_iso()); rec.setdefault('shard', day[:7]); rec.setdefault('author', 'Claude')
     bridge.save([rec])
+    if '--no-notify' in sys.argv or old.get('driveId'):         # a re-make of tonight's reel: no second buzz
+        log('done (no notification)'); return
     try:
         bridge.call('notify', title=f"🎬 {f['name']}’s reel for today is ready", body=f"{round(total)} s · tap to watch and post", tag='reel', url='./#memories')
     except Exception as e:

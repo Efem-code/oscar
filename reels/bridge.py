@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = open(os.path.join(HERE, '..', 'bridge', 'Code.local.gs')).read()
 KEY = re.search(r"^const SECRET = '([^']+)'", SRC, re.M).group(1)
+MAC = (re.search(r"^const MAC_SECRET = '([^']+)'", SRC, re.M) or [None, None])[1]
 CONN = json.loads(__import__('base64').urlsafe_b64decode(open(os.path.join(HERE, '..', 'bridge', 'connection.local.txt')).read().strip() + '=='))
 URL = CONN['u']
 DRIVE = os.path.expanduser('~/Library/CloudStorage/GoogleDrive-efemphotography@gmail.com/My Drive/Oscar ')
@@ -82,3 +83,56 @@ def local_media():
             if i:
                 out[i] = p
     return out
+
+
+# ---- direct Drive access for the Mac (short-lived token from the bridge) ----
+# macOS won't let background jobs read the Google Drive folder, so the evening
+# reel job fetches files from Drive itself instead.
+_tok = {'t': None, 'at': 0}
+CACHE = os.path.join(HERE, 'cache')
+
+
+def token():
+    import time
+    if not _tok['t'] or time.time() - _tok['at'] > 2400:
+        _tok['t'], _tok['at'] = call('token', mac=MAC)['token'], time.time()
+    return _tok['t']
+
+
+def download(file_id, ext=''):
+    """Cached local copy of a Drive file."""
+    os.makedirs(CACHE, exist_ok=True)
+    path = os.path.join(CACHE, file_id + ext)
+    if os.path.exists(path) and os.path.getsize(path):
+        return path
+    req = urllib.request.Request(f'https://www.googleapis.com/drive/v3/files/{file_id}?alt=media&supportsAllDrives=true',
+                                 headers={'Authorization': 'Bearer ' + token()})
+    tmp = path + '.part'
+    with urllib.request.urlopen(req, timeout=600, context=_SSL) as r, open(tmp, 'wb') as f:
+        while True:
+            b = r.read(1 << 20)
+            if not b:
+                break
+            f.write(b)
+    os.replace(tmp, path)
+    return path
+
+
+def upload(path, name, mime, role, ym=None):
+    """Upload a local file into the Oscar folder (role 'reel' → Reels, 'thumb' → app data). Returns its Drive id."""
+    size = os.path.getsize(path)
+    s = call('upStart', name=name, mime=mime, size=size, role=role, ym=ym)['session']
+    with open(path, 'rb') as f:
+        req = urllib.request.Request(s, data=f.read(), method='PUT', headers={'Content-Type': mime})
+    with urllib.request.urlopen(req, timeout=600, context=_SSL) as r:
+        return json.loads(r.read())['id']
+
+
+def prune_cache(days=10):
+    import time
+    if not os.path.isdir(CACHE):
+        return
+    for n in os.listdir(CACHE):
+        p = os.path.join(CACHE, n)
+        if time.time() - os.path.getmtime(p) > days * 86400:
+            os.remove(p)

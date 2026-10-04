@@ -12,6 +12,10 @@
 const FOLDER_ID = 'PASTE_FOLDER_ID';   // the part after /folders/ in the folder's link
 const SECRET = 'PASTE_A_LONG_RANDOM_KEY';
 
+/* A second key held only by the Mac's reel maker: it may borrow a short-lived
+   Drive token to fetch and upload big files directly. The phones never get this. */
+const MAC_SECRET = 'PASTE_A_SECOND_KEY_ONLY_THE_MAC_KNOWS';
+
 const SUB = { media: 'Photos & Videos', docs: 'Vet & Documents', sync: "_app data (don't edit)", reels: 'Reels' };
 
 function doGet() {
@@ -153,6 +157,11 @@ const ACTIONS = {
   summaryNow: q => ({ result: eveningSummary(!!q.dry) }),
   /* A ready-made notification to both phones (e.g. the Mac's evening reel). */
   notify: q => ({ result: sendAll_({ title: String(q.title || '').slice(0, 120), body: String(q.body || '').slice(0, 300), tag: q.tag || 'note', url: /^\.\/#\w+$/.test(q.url || '') ? q.url : './' }) }),
+
+  token: q => {
+    if (!MAC_SECRET || MAC_SECRET.indexOf('PASTE') === 0 || q.mac !== MAC_SECRET) throw new Error('Not allowed');
+    return { token: ScriptApp.getOAuthToken(), folder: FOLDER_ID };
+  },
 
   trash: q => { DriveApp.getFileById(q.id).setTrashed(true); return {}; },
 };
