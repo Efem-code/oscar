@@ -233,6 +233,9 @@ async function quickLog(type, extra = {}) {
     onSave: v => Store.put({ kind: 'log', type: 'note', note: v.note, at: v.at }) });
   const rec = await Store.put({ kind: 'log', type, ...extra });
   navigator.vibrate && navigator.vibrate(15);
+  if (type === 'meal') {          // one more tap: how much did he eat? (feeds the eating trend)
+    return toast(`🍖 Meal ${fmtTime(rec.at)} — how much did he eat?`, ['All', 'Most', 'Some', 'None'].map(a => ({ label: a, run: () => Store.put({ id: rec.id, ate: a }) })));
+  }
   toast(`${LOG[type].icon} ${LOG[type].label} logged ${fmtTime(rec.at)}`, [
     { label: 'Edit', run: () => editLog(rec.id) },
     { label: 'Undo', run: () => Store.remove(rec.id) },
@@ -596,14 +599,15 @@ EARLY_ACT.pottyGoal = () => form({ title: '🎯 Longest gap you need', value: { 
 const doneGames = id => Store.list('enrich', r => r.game === id);
 EARLY_ACT.gameDone = async d => { await Store.put({ kind: 'enrich', game: d.id }); navigator.vibrate && navigator.vibrate(15); toast('🧠 Nice — logged'); };
 EARLY_ACT.guide = d => {
-  const g = GUIDES.find(x => x.id === d.id);
-  const hist = Store.list('train', r => r.skill === g.skill).slice(0, 4);
+  const g = GUIDES.find(x => x.id === d.id) || BEHAVIOUR.find(x => x.id === d.id);
+  const hist = g.skill ? Store.list('train', r => r.skill === g.skill).slice(0, 4) : [];
   sheet(`<h2>${g.icon} ${esc(g.title)}</h2><p class="muted">${esc(g.why)}</p>
     <h4>Steps</h4><ol class="steps">${g.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
     <div class="banner jindo">🐕 <b>Jindo tip:</b> ${esc(g.jindo)}</div>
     <h4>Common mistakes</h4><ul>${g.mistakes.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+    ${g.vet ? `<div class="banner vet">🩺 <b>When to get help:</b> ${esc(g.vet)}</div>` : ''}
     ${hist.length ? `<h4>Recent sessions</h4><div class="hist">${hist.map(h => `<span>${fmtDay(localDay(h.at))} ${'★'.repeat(h.rating || 0)}${'☆'.repeat(5 - (h.rating || 0))}</span>`).join('')}</div>` : ''}
-    <div class="btns"><span class="grow"></span><button class="primary" data-act="train" data-skill="${esc(g.skill)}">Log a practice session</button></div>`);
+    ${g.skill ? `<div class="btns"><span class="grow"></span><button class="primary" data-act="train" data-skill="${esc(g.skill)}">Log a practice session</button></div>` : '<div class="btns"><span class="grow"></span><button class="ghost" data-act="log" data-k="note">📝 Note when it happens</button></div>'}`);
 };
 EARLY_ACT.game = d => {
   const g = GAMES.find(x => x.id === d.id), n = doneGames(g.id).length;
@@ -629,6 +633,9 @@ VIEWS.train = () => {
       <button class="item-main block" data-act="game" data-id="${pick.game.id}"><span class="ico">${pick.game.icon}</span><span><b>Play: ${esc(pick.game.title)}</b><small>${esc(pick.game.time)} · ${esc(pick.game.need)}</small></span></button>
     </section>
     ${pottyPlanCard()}
+    <section class="card"><h3>🆘 Behaviour help</h3>
+      ${BEHAVIOUR.map(g => `<button class="item-main block" data-act="guide" data-id="${g.id}"><span class="ico">${g.icon}</span><span><b>${esc(g.title)}</b><small>${esc(g.when)}</small></span></button>`).join('')}
+    </section>
     <section class="card"><h3>📚 How to train</h3>
       ${GUIDES.map(g => `<button class="item-main block" data-act="guide" data-id="${g.id}"><span class="ico">${g.icon}</span><span><b>${esc(g.title)}</b><small>${esc(g.when)}</small></span></button>`).join('')}
       <details><summary>Training basics that make everything easier</summary><ul>${TRAINING_BASICS.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>
@@ -707,7 +714,8 @@ function weekStats(endMs) {
   const outside = n('pee') + n('poop');
   return { accidents: n('accident'), outsidePct: outside + n('accident') ? Math.round(100 * outside / (outside + n('accident'))) : null,
     gap: gaps.length ? median(gaps) : null, walkMin: logs.filter(r => r.type === 'walk').reduce((a, r) => a + (Number(r.minutes) || 0), 0),
-    sleepH: sleep / 7, meals: n('meal'), logged: logs.length };
+    sleepH: sleep / 7, meals: n('meal'), logged: logs.length,
+    finished: (() => { const m = logs.filter(r => r.type === 'meal' && r.ate); return m.length ? Math.round(100 * m.filter(r => r.ate === 'All' || r.ate === 'Most').length / m.length) : null; })() };
 }
 function trendsCard() {
   const now = Date.now(), a = weekStats(now), b = weekStats(now - 7 * 864e5);
@@ -724,6 +732,7 @@ function trendsCard() {
     ${row('Time between breaks', a.gap, b.gap, x => fmtMin(x), 'up')}
     ${row('Walking', a.walkMin, b.walkMin, x => fmtMin(x), 'up')}
     ${row('Sleep a day', a.sleepH, b.sleepH, x => x.toFixed(1) + ' h', 'up')}
+    ${row('Meals finished', a.finished, b.finished, x => x + '%', 'up')}
     <p class="muted small">Longer gaps between potty breaks mean his bladder control is growing.</p></section>`;
 }
 

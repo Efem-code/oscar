@@ -171,3 +171,57 @@ const DAILY_SHAPE = [
   'Evening walk with some loose-leash practice, then dinner.',
   'Lots of naps — young dogs need around 14 hours of sleep. A tired-but-cranky puppy usually needs sleep, not more exercise.',
 ];
+
+/* Behaviour help: the everyday problems, reward-based fixes, and when to get
+   a professional. Written for an adolescent (6–18 months) dog who's new to
+   the home — that stage and that change both make these more common. */
+const BEHAVIOUR = [
+  {
+    id: 'bark', icon: '🔊', title: 'Barking', when: 'Work out which kind first — the fix depends on why',
+    why: 'Most barking is one of four things: alerting (a noise or someone outside), demanding (attention, food, play), boredom, or worry (being left, new things). Jindos tend to be fairly quiet dogs but strong watchdogs, so alert barking is the most common.',
+    steps: [
+      'Keep a note of when it happens for a few days (a Note in the app works) — the pattern tells you which kind it is.',
+      'Alert barking: after the first bark or two, say “Thank you”, walk over calmly, look where he’s looking, then call him away and reward. You’re telling him “I’ve got it”.',
+      'Demand barking: don’t answer it — no looking, talking or shushing (that’s attention too). The moment he’s quiet for 2–3 seconds, give him what he wanted. Expect it to get worse briefly before it stops.',
+      'Teach “Quiet”: when he stops barking on his own, say “Quiet”, then treat. Build the gap slowly before the treat.',
+      'Boredom: more sniffing and brain games (see Brain games) — a tired brain barks less. Before you leave, give a frozen Kong.',
+      'Window barking: block the view at his height (frosted film, close a blind) so the trigger simply isn’t there.',
+      'Being left: practise short absences (Alone 5 min → 30 min in Socialization) and come back calmly. Barking only when alone that’s getting worse is worth a trainer’s help.',
+    ],
+    jindo: 'Jindos are often wary of strangers and very alert to their territory. Reward calm looking at things outside rather than scolding the bark — shouting tends to sound like joining in.',
+    mistakes: ['Yelling “quiet!” — to a dog it often sounds like barking back.', 'Giving in after a long round of demand barking — it teaches him to bark longer.', 'Bark collars (spray/shock/sound) — they suppress the bark without fixing the reason and can add fear.'],
+    vet: 'Sudden new barking (especially at night), or barking with pacing, whining and not settling, can be stress or discomfort — mention it to the vet.',
+  },
+  {
+    id: 'bite', icon: '🦷', title: 'Biting & mouthing', when: 'Very normal at his age — teach soft mouth and better outlets',
+    why: 'At 6–12 months many dogs go through an adolescent “mouthy” phase — play-biting, grabbing sleeves, chewing things. It usually means overexcited, overtired, or under-stimulated, not aggressive.',
+    steps: [
+      'Hands are never toys. Keep a tug toy or plush within reach and offer it the moment his mouth comes toward you — reward when he takes it.',
+      'If teeth touch skin during play: say “Oops”, go still, then calmly stand up and step away (or behind a gate) for 20–30 seconds. Play stops when teeth land on people.',
+      'Watch for overtired: a puppy who gets bitey in the evening often needs a nap, not more play. Crate or pen with a chew and let him sleep — young dogs need around 14+ hours.',
+      'Give legal chewing every day: bully sticks, frozen carrots, rubber chews, lick mats. Rotate them so they stay interesting.',
+      'Swap, don’t chase: if he grabs a shoe, offer a treat or toy and praise the drop (see Drop it).',
+      'Calm practice: reward him for gentle licks or resting his chin on your hand — teach what you DO want.',
+      'Kids and visitors: keep play low-key and supervised; ask visitors to ignore him until he’s calm.',
+    ],
+    jindo: 'Jindos can be sensitive to rough handling. Pinning, holding the mouth shut or “alpha” corrections usually make biting worse and damage trust.',
+    mistakes: ['Pulling your hand away fast — it makes it a chase game.', 'Rough-housing with hands, then getting cross when he bites.', 'Physical punishment of any kind.'],
+    vet: 'Get a trainer or vet behaviourist (look for certified, reward-based) if he growls or snaps when you touch his food, toys or bed, when being handled, or if bites are hard, without warning, or getting worse — that’s different from play mouthing.',
+  },
+  {
+    id: 'eat', icon: '🍖', title: 'Not finishing his food', when: 'Common in a new home — usually fixable with routine',
+    why: 'New-home stress often dulls appetite for the first week or two. Adolescent dogs also slow down as growth slows, and many get the message that food will always be there. Some just get more on the bag’s chart than they need.',
+    steps: [
+      'Check the amount: compare his food plan with the bag’s chart for his CURRENT weight and age (and ask the vet). If he’s at a healthy weight and leaving some, he may simply be getting more than he needs.',
+      'Set meal times: put the bowl down for 15–20 minutes, then pick it up — even if he hasn’t finished — and offer nothing until the next meal. Most dogs learn to eat within a few days. (Water stays down all day.)',
+      'Keep it boring and consistent: same food, same place, quiet spot away from foot traffic. Constant switching or adding toppers teaches him to hold out for something better.',
+      'Go easy on treats: training treats count — use pieces of his kibble for easy reps, or reduce the meal a little on heavy training days.',
+      'Exercise before meals: a walk or sniff game 20–30 minutes before eating often helps appetite.',
+      'Make it a game: some dogs eat better from a puzzle, snuffle mat or scatter in the grass (see Brain games).',
+      'Log it: when you tap Meal, tap how much he ate. The Grow tab and 9 pm summary show the pattern over a week.',
+    ],
+    jindo: 'Jindos are often described as “self-regulating” eaters who won’t overeat — leaving some isn’t unusual for the breed as long as he’s keeping a healthy weight and energy.',
+    mistakes: ['Free-feeding (bowl down all day) — you can’t tell how much he’s eating.', 'Hand-feeding or adding tasty extras every time he refuses.', 'Switching foods suddenly — it can upset his stomach; change over 7–10 days.'],
+    vet: 'Call the vet if he skips food for more than a day, or if poor appetite comes with vomiting, diarrhoea, low energy, weight loss, or straining to eat.',
+  },
+];

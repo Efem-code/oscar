@@ -194,7 +194,7 @@ def caption(f):
         bits.append(f"{f['walks']} walk{'s' if f['walks'] > 1 else ''} 🦮")
     if f['logged'] and not f['accidents']:
         bits.append('zero accidents 🙌')
-    head = f"Day {f['n']} home with {f['name']} 🐾" if f['n'] else f"A day with {f['name']} 🐾"
+    head = f"{f['name']}'s Diary · Day {f['n']} 🐾" if f['n'] else f"{f['name']}'s Diary 🐾"
     lines = [head]
     if bits:
         lines.append(' · '.join(bits).capitalize())
@@ -255,26 +255,110 @@ def text_png(lines, path, size, y_frac, alpha=255):
     img.save(path)
 
 
-def render(items, lines, out):
+# ---------- the "Oscar's Diary" theme ----------
+# One look for every reel so they read as a series in the feed: the app's
+# terracotta + cream, a DAY badge up front, a warm grade, soft crossfades,
+# a small corner tag, and the same end card.
+TERRA, CREAM, INK = (192, 103, 58), (251, 241, 228), (43, 34, 26)
+F_DISPLAY = ('/System/Library/Fonts/Supplemental/Futura.ttc', 4)     # Futura Condensed ExtraBold
+F_TEXT = ('/System/Library/Fonts/Avenir Next.ttc', 2)                # Avenir Next Demi Bold
+GRADE = 'eq=saturation=1.12:contrast=1.04:brightness=0.012,colorbalance=rs=0.035:gs=0.01:bs=-0.035:rm=0.02:bm=-0.02,vignette=angle=PI/5'
+XF = 0.25                                                             # crossfade seconds
+ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'icon-512.png')
+
+
+def _font(spec, size):
+    from PIL import ImageFont
+    return ImageFont.truetype(spec[0], size, index=spec[1])
+
+
+def theme_badge(big, small, path):
+    """DAY 3 stamp + subtitle, upper third, for the opening seconds."""
+    from PIL import Image, ImageDraw
+    img = Image.new('RGBA', (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(img)
+    fb, fs = _font(F_DISPLAY, 170), _font(F_TEXT, 54)
+    while d.textlength(big, font=fb) > W - 200: fb = _font(F_DISPLAY, fb.size - 8)
+    bw = d.textlength(big, font=fb); pad = 46
+    x0, y0 = (W - bw) / 2 - pad, H * 0.12
+    asc, desc = fb.getmetrics()
+    d.rounded_rectangle([x0, y0, x0 + bw + 2 * pad, y0 + asc + desc + 20], radius=36, fill=TERRA + (240,))
+    d.text(((W - bw) / 2, y0 + 8), big, font=fb, fill=CREAM)
+    if small:
+        while d.textlength(small, font=fs) > W - 140: fs = _font(F_TEXT, fs.size - 4)
+        sw = d.textlength(small, font=fs)
+        d.text(((W - sw) / 2, y0 + asc + desc + 50), small, font=fs, fill=(255, 255, 255), stroke_width=5, stroke_fill=(0, 0, 0, 140))
+    img.save(path)
+
+
+def theme_tag(text, path):
+    """Small pill in the bottom-left corner for the rest of the reel."""
+    from PIL import Image, ImageDraw
+    img = Image.new('RGBA', (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(img)
+    f = _font(F_TEXT, 34); tw = d.textlength(text, font=f)
+    x, y = 48, H - 300
+    d.rounded_rectangle([x, y, x + tw + 44, y + 62], radius=31, fill=(0, 0, 0, 110))
+    d.text((x + 22, y + 10), text, font=f, fill=CREAM + (235,))
+    img.save(path)
+
+
+def theme_end(name, path):
+    """Closing card: paw logo, handle, sign-off — same every day."""
+    from PIL import Image, ImageDraw
+    img = Image.new('RGB', (W, H), CREAM); d = ImageDraw.Draw(img)
+    try:
+        icon = Image.open(ICON).convert('RGBA').resize((300, 300))
+        img.paste(icon, ((W - 300) // 2, int(H * 0.30)), icon)
+    except Exception:
+        pass
+    for text, spec, size, y, col in [(f"{name}'s Diary".upper(), F_DISPLAY, 110, 0.49, TERRA), (HANDLE, F_TEXT, 64, 0.57, INK), ('see you tomorrow', F_TEXT, 44, 0.62, (133, 118, 106))]:
+        f = _font(spec, size); tw = d.textlength(text, font=f)
+        d.text(((W - tw) / 2, H * y), text, font=f, fill=col)
+    img.save(path)
+
+
+def render_card(png, dur, out):
+    run([FFMPEG, '-y', '-v', 'error', '-loop', '1', '-t', f'{dur:.2f}', '-i', png, '-f', 'lavfi', '-t', f'{dur:.2f}', '-i', 'anullsrc=r=48000:cl=stereo',
+         '-vf', f'scale={W}:{H},fps={FPS},format=yuv420p,fade=t=in:st=0:d=0.3', '-map', '0:v', '-map', '1:a',
+         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-r', str(FPS), '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2', '-shortest', out])
+
+
+def render(items, lines, out, badge=None, tag='', name='Oscar'):
+    """Cut the clips together in the Diary theme. Returns the length in seconds."""
     tmp = tempfile.mkdtemp(prefix='oscar-reel-')
     try:
         parts = []
         for i, x in enumerate(items):
             p = os.path.join(tmp, f'{i:02d}.mp4')
             render_segment(x, p)
-            parts.append(p)
-        lst = os.path.join(tmp, 'list.txt')
-        open(lst, 'w').write(''.join(f"file '{p}'\n" for p in parts))
-        total = sum(x['len'] for x in items)
-        hook_end = items[0]['len'] + 0.1
-        title, handle = os.path.join(tmp, 'title.png'), os.path.join(tmp, 'handle.png')
-        text_png(lines, title, 80, 0.13)
-        text_png([HANDLE], handle, 48, 0.82, alpha=235)
-        fc = (f"[0:v][1:v]overlay=0:0:enable='lt(t,{hook_end:.2f})'[a];"
-              f"[a][2:v]overlay=0:0:enable='gt(t,{total - 1.6:.2f})',format=yuv420p[v]")
-        run([FFMPEG, '-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', lst, '-i', title, '-i', handle,
-             '-filter_complex', fc, '-map', '[v]', '-map', '0:a', '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
-             '-c:v', 'libx264', '-preset', 'medium', '-crf', '21', '-maxrate', '6M', '-bufsize', '12M',
+            parts.append((p, x['len']))
+        end_png, end_mp4 = os.path.join(tmp, 'end.png'), os.path.join(tmp, 'end.mp4')
+        theme_end(name, end_png); render_card(end_png, 1.8, end_mp4)
+        parts.append((end_mp4, 1.8))
+
+        # Crossfade chain: each join overlaps the clips by XF seconds.
+        inputs, vf, af = [], [], []
+        for p, _ in parts: inputs += ['-i', p]
+        acc, vprev, aprev = parts[0][1], '[0:v]', '[0:a]'
+        for k in range(1, len(parts)):
+            off = acc - XF
+            vf.append(f"{vprev}[{k}:v]xfade=transition=fade:duration={XF}:offset={off:.3f}[v{k}]")
+            af.append(f"{aprev}[{k}:a]acrossfade=d={XF}[a{k}]")
+            vprev, aprev = f'[v{k}]', f'[a{k}]'
+            acc += parts[k][1] - XF
+        total = acc
+        hook_end = items[0]['len'] - XF / 2
+        body_end = total - 1.8
+
+        bpng, tpng = os.path.join(tmp, 'badge.png'), os.path.join(tmp, 'tag.png')
+        big, small = badge if badge else (lines[0], lines[1] if len(lines) > 1 else '')
+        theme_badge(big, small, bpng); theme_tag(tag or f"{name.upper()}'S DIARY", tpng)
+        n = len(parts)
+        vf.append(f"{vprev}{GRADE}[g]")
+        vf.append(f"[g][{n}:v]overlay=0:0:enable='lt(t,{hook_end:.2f})'[b]")
+        vf.append(f"[b][{n + 1}:v]overlay=0:0:enable='between(t,{hook_end:.2f},{body_end:.2f})',format=yuv420p[v]")
+        af.append(f"{aprev}loudnorm=I=-16:TP=-1.5:LRA=11[a]")
+        run([FFMPEG, '-y', '-v', 'error', *inputs, '-i', bpng, '-i', tpng, '-filter_complex', ';'.join(vf + af),
+             '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'medium', '-crf', '21', '-maxrate', '6M', '-bufsize', '12M',
              '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', out])
         return total
     finally:
@@ -316,7 +400,8 @@ def main():
         return
     tmp_out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out', f'{day} reel.mp4') if preview else os.path.join(tempfile.gettempdir(), f'oscar-reel-{day}.mp4')
     os.makedirs(os.path.dirname(tmp_out), exist_ok=True)
-    total = render(items, lines, tmp_out)
+    badge = (f"DAY {f['n']}", (f['milestones'][0] if f['milestones'] else f"with a {f['breed']}")) if f['n'] else None
+    total = render(items, lines, tmp_out, badge=badge, tag=f"{f['name'].upper()}'S DIARY" + (f" · DAY {f['n']}" if f['n'] else ''), name=f['name'])
     if preview:
         log(f'preview: {total:.1f} s → {tmp_out}')
         print(cap + '\n\n' + TAGS)

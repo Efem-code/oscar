@@ -394,3 +394,5 @@ ol.steps li { margin-bottom: 6px; }
 .ask-pat small { color: var(--muted); margin-left: 4px; }
 .ask-bl dt { font-weight: 600; margin-top: 8px; font-size: 13.5px; }
 .ask-bl dd { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
+
+.banner.vet { background: color-mix(in srgb, var(--bad) 12%, var(--card)); cursor: default; }
