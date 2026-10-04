@@ -217,7 +217,9 @@ def creator_hook(f, day):
         (f'things my {b.split()[-1]} did today', False),
         (f'{name} has been home {n} days' if n else f'a day with {name}', False),
     ]
-    return random.choice(options)
+    # Rotate in order by day number, so consecutive posts never share a hook.
+    k = (n or int(day.replace('-', ''))) % len(options)
+    return options[k]
 
 
 def hook_text(f, day):
