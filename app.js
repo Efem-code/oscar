@@ -1162,6 +1162,7 @@ async function viewer(id) {
         ${navigator.share ? '<button data-v="share">Share</button>' : ''}
         ${rec.driveId ? `<a href="${Drive.webLink(rec.driveId)}" target="_blank" rel="noopener">Drive</a>` : '<span class="muted small">⏳ not uploaded yet</span>'}
         ${!rec.video && !rec.doc ? '<button data-v="avatar">Profile pic</button>' : ''}
+        ${!rec.doc ? `<button data-v="noreel">${rec.noReel ? '🎬 Back in reels' : '🚫 Leave out of reels'}</button>` : ''}
         <button data-v="del" class="danger">Delete</button>
       </div>
     </div>
@@ -1196,6 +1197,7 @@ async function viewer(id) {
     if (a === 'close') { await saveCap(); el.hidden = true; el.innerHTML = ''; }
     if (a === 'prev' || a === 'next') { await saveCap(); viewer(list[i + (a === 'next' ? 1 : -1)].id); }
     if (a === 'star') { await Store.put({ id: rec.id, star: !rec.star }); viewer(id); }
+    if (a === 'noreel') { await Store.put({ id: rec.id, noReel: !rec.noReel }); toast(rec.noReel ? 'Can be used in reels again' : 'Won’t be used in reels'); viewer(id); }
     if (a === 'avatar') { await Store.put({ id: 'profile', kind: 'profile', photoId: rec.id }); toast('Profile picture set'); }
     if (a === 'share') {
       try { const blob = await Media.blobFor(rec); const file = new File([blob], rec.name || 'oscar.jpg', { type: rec.mime });

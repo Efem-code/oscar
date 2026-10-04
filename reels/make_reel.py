@@ -97,10 +97,26 @@ def jpeg_orientation(path):
     return 1
 
 
+def fetch(path, tries=12):
+    """Make sure Drive for desktop has the file on disk. In the background it can
+    refuse with EDEADLK ('resource deadlock avoided') while it downloads — retry."""
+    for k in range(tries):
+        try:
+            with open(path, 'rb') as f:
+                while f.read(8 << 20):
+                    pass
+            return True
+        except OSError as e:
+            log(f'waiting for Drive to fetch {os.path.basename(path)} ({e.strerror})')
+            time.sleep(min(30, 3 * (k + 1)))
+    return False
+
+
 def plan_day(day, recs, local):
     """Pick and order tonight's clips. Returns (items, facts) or (None, reason)."""
     media = [r for r in recs.values() if r.get('kind') == 'media' and not r.get('deleted') and not r.get('doc')
-             and r.get('driveId') in local and local_day(r['at']) == day]
+             and not r.get('noReel') and r.get('driveId') in local and local_day(r['at']) == day]
+    media = [r for r in media if fetch(local[r['driveId']])]
     vids = [r for r in media if r.get('video')]
     pics = [r for r in media if not r.get('video')]
     if not ((len(media) >= 3 and vids) or len(pics) >= 5):
@@ -180,6 +196,20 @@ def caption(f):
 COVER = f'scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1'
 
 
+def upright(path, out):
+    """A plain JPEG turned the way the phone shows it (EXIF/HEIC rotation applied)."""
+    from PIL import Image, ImageOps
+    try:
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+    except ImportError:
+        pass
+    im = ImageOps.exif_transpose(Image.open(path)).convert('RGB')
+    im.thumbnail((2160, 2160))
+    im.save(out, quality=92)
+    return out
+
+
 def render_segment(x, out):
     d = f"{x['len']:.2f}"
     common = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p', '-r', str(FPS),
@@ -191,10 +221,10 @@ def render_segment(x, out):
         amap = ['-map', '0:v', '-map', '0:a' if x['audio'] else '1:a']
         run([FFMPEG, '-y', '-v', 'error', *inputs, '-vf', f'{COVER},fps={FPS}', *amap, *common])
     else:
-        rot = {3: 'transpose=1,transpose=1,', 6: 'transpose=1,', 8: 'transpose=2,'}.get(jpeg_orientation(x['path']), '')
+        src = upright(x['path'], out + '.jpg')
         frames = int(x['len'] * FPS)
-        zoom = f"{rot}{COVER},scale={W * 2}:{H * 2},zoompan=z='min(zoom+0.0016,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s={W}x{H}:fps={FPS}"
-        run([FFMPEG, '-y', '-v', 'error', '-i', x['path'], '-f', 'lavfi', '-t', d, '-i', 'anullsrc=r=48000:cl=stereo',
+        zoom = f"{COVER},scale={W * 2}:{H * 2},zoompan=z='min(zoom+0.0016,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s={W}x{H}:fps={FPS}"
+        run([FFMPEG, '-y', '-v', 'error', '-i', src, '-f', 'lavfi', '-t', d, '-i', 'anullsrc=r=48000:cl=stereo',
              '-filter_complex', f'[0:v]{zoom},trim=duration={d}[v]', '-map', '[v]', '-map', '1:a', *common])
 
 
