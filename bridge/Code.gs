@@ -12,7 +12,7 @@
 const FOLDER_ID = 'PASTE_FOLDER_ID';   // the part after /folders/ in the folder's link
 const SECRET = 'PASTE_A_LONG_RANDOM_KEY';
 
-const SUB = { media: 'Photos & Videos', docs: 'Vet & Documents', sync: "_app data (don't edit)" };
+const SUB = { media: 'Photos & Videos', docs: 'Vet & Documents', sync: "_app data (don't edit)", reels: 'Reels' };
 
 function doGet() {
   return ContentService.createTextOutput('Puppy Log bridge is running. Folder: ' + DriveApp.getFolderById(FOLDER_ID).getName());
@@ -41,6 +41,7 @@ function child_(parent, name) {
 function sub_(k) { return child_(root_(), SUB[k]); }
 function parentFor_(q) {
   if (q.role === 'thumb') return sub_('sync');
+  if (q.role === 'reel') return sub_('reels');
   if (q.doc) return sub_('docs');
   return child_(sub_('media'), q.ym || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM'));
 }
@@ -150,6 +151,8 @@ const ACTIONS = {
   /* The text of the latest scheduled notification, for the phones' service workers. */
   msg: () => ({ msg: JSON.parse(PropertiesService.getScriptProperties().getProperty('msg') || 'null') }),
   summaryNow: q => ({ result: eveningSummary(!!q.dry) }),
+  /* A ready-made notification to both phones (e.g. the Mac's evening reel). */
+  notify: q => ({ result: sendAll_({ title: String(q.title || '').slice(0, 120), body: String(q.body || '').slice(0, 300), tag: q.tag || 'note', url: /^\.\/#\w+$/.test(q.url || '') ? q.url : './' }) }),
 
   trash: q => { DriveApp.getFileById(q.id).setTrashed(true); return {}; },
 };

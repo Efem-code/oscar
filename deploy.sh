@@ -11,6 +11,17 @@ cd "$(dirname "$0")"
 say()  { printf '\n\033[1m%s\033[0m\n' "$*"; }
 note() { printf '  %s\n' "$*"; }
 
+say "0. Checking the code"
+for f in *.js; do node --check "$f" || { echo "Syntax error in $f — not deploying"; exit 1; }; done
+# Assigning ACT.x above `const ACT = {}` throws at load and blanks the whole app.
+python3 - <<'PY' || { echo "Not deploying."; exit 1; }
+import re, sys
+s = open('app.js').read(); i = s.index('const ACT = {};')
+bad = re.findall(r'(?<![A-Z_])ACT\.\w+\s*=', s[:i])
+if bad: print('ACT used before it exists:', bad); sys.exit(1)
+PY
+note "ok"
+
 say "1. Stamping this build"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 sed -i '' "s/^const BUILD = '.*';/const BUILD = '$STAMP';/" sw.js

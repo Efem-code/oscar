@@ -524,8 +524,9 @@ function weightChart(unit) {
 }
 
 /* ---------- Train tab ---------- */
-/* Its button handlers join ACT once that exists (it's declared further down). */
-const TRAIN_ACT = {};
+/* Handlers defined above `const ACT` go here and join ACT once it exists —
+   assigning to ACT before its declaration crashes the whole app (TDZ). */
+const EARLY_ACT = {};
 /* House-training progress, from the logs: how long he's holding it, the
    accident-free streak, and when it's reasonable to stretch the schedule. */
 function pottyProgress() {
@@ -580,19 +581,19 @@ function pottyPlanCard() {
     </ul></details></section>`;
 }
 
-TRAIN_ACT.pottyStretch = async d => {
+EARLY_ACT.pottyStretch = async d => {
   const m = Number(d.m) || 0;
   await Store.put({ id: 'profile', kind: 'profile', pottyTarget: m || '', pottyTargetAt: m ? new Date().toISOString() : '' });
   toast(m ? `Schedule: every ${fmtMin(m)} — the countdown uses this now` : 'Back to the app’s own estimate');
 };
-TRAIN_ACT.pottyGoal = () => form({ title: '🎯 Longest gap you need', value: { goal: (Number(P().pottyGoal) || 240) / 60 },
+EARLY_ACT.pottyGoal = () => form({ title: '🎯 Longest gap you need', value: { goal: (Number(P().pottyGoal) || 240) / 60 },
   intro: '<p class="muted">e.g. 4 hours until a midday break on work days.</p>',
   fields: [{ k: 'goal', label: 'Hours', type: 'number', required: true }],
   onSave: v => Store.put({ id: 'profile', kind: 'profile', pottyGoal: Math.round(Number(v.goal) * 60) }) });
 
 const doneGames = id => Store.list('enrich', r => r.game === id);
-TRAIN_ACT.gameDone = async d => { await Store.put({ kind: 'enrich', game: d.id }); navigator.vibrate && navigator.vibrate(15); toast('🧠 Nice — logged'); };
-TRAIN_ACT.guide = d => {
+EARLY_ACT.gameDone = async d => { await Store.put({ kind: 'enrich', game: d.id }); navigator.vibrate && navigator.vibrate(15); toast('🧠 Nice — logged'); };
+EARLY_ACT.guide = d => {
   const g = GUIDES.find(x => x.id === d.id);
   const hist = Store.list('train', r => r.skill === g.skill).slice(0, 4);
   sheet(`<h2>${g.icon} ${esc(g.title)}</h2><p class="muted">${esc(g.why)}</p>
@@ -602,7 +603,7 @@ TRAIN_ACT.guide = d => {
     ${hist.length ? `<h4>Recent sessions</h4><div class="hist">${hist.map(h => `<span>${fmtDay(localDay(h.at))} ${'★'.repeat(h.rating || 0)}${'☆'.repeat(5 - (h.rating || 0))}</span>`).join('')}</div>` : ''}
     <div class="btns"><span class="grow"></span><button class="primary" data-act="train" data-skill="${esc(g.skill)}">Log a practice session</button></div>`);
 };
-TRAIN_ACT.game = d => {
+EARLY_ACT.game = d => {
   const g = GAMES.find(x => x.id === d.id), n = doneGames(g.id).length;
   sheet(`<h2>${g.icon} ${esc(g.title)}</h2><p class="muted">${esc(g.time)} · ${g.level === 1 ? 'easy' : 'a bit harder'} · you need: ${esc(g.need)}</p>
     <p>${esc(g.how)}</p>${n ? `<p class="muted small">Done ${n} time${n > 1 ? 's' : ''} · last ${fmtDay(localDay(doneGames(g.id)[0].at))}</p>` : ''}
@@ -751,15 +752,15 @@ VIEWS.memories = () => {
   const f = ui.memFilter;
   const media = f === 'portraits' ? all.filter(r => r.portrait) : f === 'starred' ? all.filter(r => r.star) : f === 'videos' ? all.filter(r => r.video) : all;
   const extras = f === 'all' ? [...Store.list('milestone'), ...Store.list('journal')] : f === 'starred' ? Store.list('milestone') : [];
-  const items = [...media, ...extras].sort((a, b) => a.at < b.at ? 1 : -1);
+  const oldest = Store.pref('oscar.photoOrder') === 'oldest';
+  const items = [...media, ...extras].sort((a, b) => (a.at < b.at ? 1 : -1) * (oldest ? -1 : 1));
   const groups = [];
   for (const r of items) {
-    const w = App.weekOf(r.at);
-    const key = w != null && w >= 0 ? 'w' + w : 'm' + localDay(r.at).slice(0, 7);
+    const key = localDay(r.at);
     let g = groups[groups.length - 1];
     if (!g || g.key !== key) {
-      const title = key[0] === 'w' ? `${w} weeks old` : parseDay(localDay(r.at)).toLocaleDateString([], { month: 'long', year: 'numeric' });
-      groups.push(g = { key, title, items: [] });
+      const w = App.weekOf(r.at);
+      groups.push(g = { key, title: `${fmtDay(key)}${w != null && w >= 0 ? ` · ${w} weeks old` : ''}`, items: [] });
     }
     g.items.push(r);
   }
@@ -775,12 +776,53 @@ VIEWS.memories = () => {
     ${portraits.length ? `<section class="card"><div class="h-row"><h3>Growing up</h3>${portraits.length > 1 ? '<button class="pill" data-act="flipbook">▶ Play</button>' : ''}</div>
       <div class="strip">${portraits.map(r => `<button data-act="view" data-id="${r.id}"><div class="th" data-thumb="${r.id}"></div><small>wk ${App.weekOf(r.at) ?? '?'}</small></button>`).join('')}</div></section>`
       : `<section class="card empty"><p><b>Weekly portrait:</b> same spot, same angle, once a week. The camera shows last week’s shot as a ghost so you can line him up — by the end you have a growing-up flipbook.</p><button class="primary" data-act="portrait">Take the first one</button></section>`}
-    <div class="filters">${[['all', 'All'], ['starred', '⭐ Starred'], ['portraits', 'Portraits'], ['videos', 'Videos']].map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="memFilter" data-k="${k}">${l}</button>`).join('')}</div>
+    ${reelsStrip()}
+    <div class="filters"><button class="chip" data-act="photoOrder">${oldest ? '↑ Oldest first' : '↓ Newest first'}</button>${[['all', 'All'], ['starred', '⭐ Starred'], ['portraits', 'Portraits'], ['videos', 'Videos']].map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="memFilter" data-k="${k}">${l}</button>`).join('')}</div>
     ${groups.map(g => `<section class="mgroup"><h3>${esc(g.title)}</h3>
       ${g.items.filter(r => r.kind !== 'media').map(memCard).join('')}
       <div class="grid">${g.items.filter(r => r.kind === 'media').map(r => `<button class="gi" data-act="view" data-id="${r.id}">
         <div class="th" data-thumb="${r.id}"></div>${r.video ? '<span class="vid">▶</span>' : ''}${r.star ? '<span class="star">⭐</span>' : ''}${!r.driveId ? '<span class="up" title="Waiting to upload">⏳</span>' : ''}</button>`).join('')}</div>
     </section>`).join('') || '<p class="muted pad">Photos, videos, milestones and journal notes all land here, grouped by his age.</p>'}`;
+};
+
+/* ---------- reels ---------- */
+/* Made on the Mac each evening (reels/make_reel.py) from the day's photos and
+   videos, saved to Drive → Reels, and listed here as `reel` records. Posting
+   stays one tap and yours: Share → Instagram, with the caption copied. */
+function reelsStrip() {
+  const reels = Store.list('reel');
+  if (!reels.length) return '';
+  return `<section class="card"><div class="h-row"><h3>🎬 Reels</h3><span class="muted small">made each evening from the day</span></div>
+    <div class="strip">${reels.slice(0, 12).map(r => `<button data-act="reel" data-id="${r.id}"><div class="th reel ${r.posted ? 'posted' : ''}" ${r.thumbId ? `data-thumb="${r.id}"` : ''}>${r.posted ? '<i>✓ posted</i>' : '<i>▶</i>'}</div><small>${fmtDay(localDay(r.at))}</small></button>`).join('')}</div></section>`;
+}
+EARLY_ACT.photoOrder = () => { Store.setPref('oscar.photoOrder', Store.pref('oscar.photoOrder') === 'oldest' ? 'newest' : 'oldest'); render(); };
+EARLY_ACT.reel = async d => {
+  const r = Store.get(d.id); if (!r) return;
+  const caption = [r.caption, r.tags].filter(Boolean).join('\n\n');
+  sheet(`<h2>🎬 ${esc(r.title || 'Reel')}</h2>
+    <p class="muted">${fmtDay(localDay(r.at))} · ${r.duration ? Math.round(r.duration) + ' s' : ''} · ${r.clips || '?'} clips</p>
+    <div class="reel-stage" id="reel-stage"><div class="spin">Loading…</div></div>
+    <h4>Caption</h4><p class="pre">${esc(caption)}</p>
+    <p class="small muted">Tip: add a trending sound in Instagram before posting — it’s one of the biggest boosts for reach.</p>
+    <div class="btns">${r.posted ? '<span class="muted small">✓ marked as posted</span>' : '<button class="ghost" id="reel-done">Mark posted</button>'}<span class="grow"></span>
+      ${r.driveId ? `<a class="ghost" href="${Drive.webLink(r.driveId)}" target="_blank" rel="noopener">Drive</a>` : ''}
+      <button class="primary" id="reel-share" disabled>Post to Instagram</button></div>`, async root => {
+    let blob = null;
+    $('#reel-done', root) && ($('#reel-done', root).onclick = async () => { await Store.put({ id: r.id, posted: true }); closeSheet(); });
+    try {
+      blob = await Drive.download(r.driveId, f => { const sp = $('#reel-stage .spin', root); if (sp) sp.textContent = `Loading… ${Math.round(f * 100)}%`; }, 'video/mp4');
+      $('#reel-stage', root).innerHTML = `<video src="${URL.createObjectURL(blob)}" controls playsinline loop muted autoplay></video>`;
+      $('#reel-share', root).disabled = false;
+    } catch (e) { $('#reel-stage', root).innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+    $('#reel-share', root).onclick = async () => {
+      try { await navigator.clipboard.writeText(caption); } catch {}
+      const file = new File([blob], `oscar-${localDay(r.at)}.mp4`, { type: 'video/mp4' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file] }); toast('Caption copied — paste it in Instagram', [{ label: 'Mark posted', run: () => Store.put({ id: r.id, posted: true }) }]); }
+        catch {}
+      } else toast('This phone can’t share videos from here — open it in Drive and share from there');
+    };
+  });
 };
 
 function memCard(r) {
@@ -860,7 +902,7 @@ function syncLine() {
 
 /* ---------- actions ---------- */
 const ACT = {};
-Object.assign(ACT, TRAIN_ACT);
+Object.assign(ACT, EARLY_ACT);
 
 ACT.tab = d => { ui.tab = d.tab; if (d.tab === 'today') ui.day = todayKey(); render(); window.scrollTo(0, 0); };
 ACT.log = d => quickLog(d.k);
@@ -1061,14 +1103,22 @@ async function onFiles(input) {
   if (!files.length) return;
   const ctx = captureCtx; captureCtx = {};
   const fresh = input.id !== 'in-pick';
-  const made = [];
-  for (const f of files) made.push(await Media.add(f, { fresh, doc: ctx.doc, caption: ctx.doc ? 'Vet record' : '' }));
+  const made = [], dups = [];
+  for (const f of files) {
+    const r = await Media.add(f, { fresh, doc: ctx.doc, caption: ctx.doc ? 'Vet record' : '' });
+    (r.duplicate ? dups : made).push(r.duplicate || r);
+  }
+  if (dups.length && !made.length) {
+    const d = dups[0];
+    return toast(dups.length === 1 ? `Already in Photos — skipped (taken ${fmtDay(localDay(d.at))})` : `All ${dups.length} are already in Photos — skipped`,
+      dups.length === 1 ? [{ label: 'Show it', run: () => viewer(d.id) }] : []);
+  }
   if (ctx.vet) {
     const v = Store.get(ctx.vet);
     await Store.put({ id: v.id, docs: [...(v.docs || []), ...made.map(m => m.id)] });
     return ACT.showVet({ id: v.id });
   }
-  toast(`Saved ${made.length > 1 ? made.length + ' items' : ''} — ${Drive.configured() ? 'uploading to Drive' : 'will upload when synced'}`,
+  toast(`Saved ${made.length > 1 ? made.length + ' items' : ''}${dups.length ? ` · ${dups.length} duplicate${dups.length > 1 ? 's' : ''} skipped` : ''} — ${Drive.configured() ? 'uploading to Drive' : 'will upload when synced'}`,
     made.length === 1 ? [{ label: 'Add caption', run: () => viewer(made[0].id) }] : []);
 }
 ACT.portrait = () => Media.portraitCamera(rec => toast(`🐶 Week ${App.weekOf(rec.at) ?? ''} portrait saved`, [{ label: 'View', run: () => viewer(rec.id) }]));
@@ -1080,7 +1130,8 @@ ACT.milestone = () => form({ title: '⭐ Milestone', fields: [
   { k: 'at', label: 'When', type: 'datetime' }, { k: 'note', label: 'The story', type: 'textarea' },
   { k: 'file', label: 'Photo or video (optional)', type: 'file' }],
   onSave: async v => {
-    const m = v.file ? await Media.add(v.file, { caption: v.title, star: true, at: v.at }) : null;
+    let m = v.file ? await Media.add(v.file, { caption: v.title, star: true, at: v.at }) : null;
+    if (m && m.duplicate) m = m.duplicate;          // already in Photos: link the existing one
     await Store.put({ kind: 'milestone', title: v.title, at: v.at, note: v.note, mediaId: m?.id });
   } });
 ACT.editMilestone = d => {

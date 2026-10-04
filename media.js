@@ -47,11 +47,81 @@ const Media = (() => {
   };
   const safe = s => (s || '').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 60);
 
-  /* Save one picked/captured file. Returns the new media record. */
+  /* Capture time from the file itself: JPEG EXIF DateTimeOriginal, or an MP4/MOV
+     'mvhd' creation time. Returns a Date, or null when the file doesn't say
+     (shared/re-saved files often don't) or says something impossible. */
+  async function takenAt(file) {
+    try {
+      const ok = d => d && d.getFullYear() >= 2015 && d.getTime() < Date.now() + 36e5 ? d : null;
+      if (/jpe?g/i.test(file.type)) {
+        const v = new DataView(await file.slice(0, 256 * 1024).arrayBuffer());
+        for (let i = 2; i < v.byteLength - 10; i++) {
+          if (v.getUint32(i) !== 0x45786966 || v.getUint16(i + 4) !== 0) continue;      // "Exif\0\0"
+          const t = i + 6, le = v.getUint16(t) === 0x4949;
+          const u16 = o => v.getUint16(t + o, le), u32 = o => v.getUint32(t + o, le);
+          const find = (ifd, tag) => { const n = u16(ifd); for (let k = 0; k < n; k++) if (u16(ifd + 2 + 12 * k) === tag) return ifd + 2 + 12 * k; return null; };
+          const ifd0 = u32(4), ex = find(ifd0, 0x8769);
+          for (const [ifd, tag] of [[ex && u32(ex + 8), 0x9003], [ifd0, 0x0132]]) {
+            const e = ifd && find(ifd, tag); if (!e) continue;
+            let s = ''; for (let k = 0; k < 19; k++) s += String.fromCharCode(v.getUint8(t + u32(e + 8) + k));
+            const m = s.match(/(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/);
+            if (m) return ok(new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]));   // camera local time
+          }
+          return null;
+        }
+      }
+      if (/video\//i.test(file.type)) {
+        let pos = 0;
+        while (pos + 8 <= file.size) {                  // walk the top-level boxes to the moov
+          const h = new DataView(await file.slice(pos, pos + 16).arrayBuffer());
+          let size = h.getUint32(0); const kind = String.fromCharCode(h.getUint8(4), h.getUint8(5), h.getUint8(6), h.getUint8(7));
+          if (size === 1) size = Number(h.getBigUint64(8)); else if (size === 0) size = file.size - pos;
+          if (kind === 'moov') {
+            const b = new Uint8Array(await file.slice(pos, pos + Math.min(size, 1 << 20)).arrayBuffer());
+            for (let i = 0; i < b.length - 16; i++) if (b[i] === 0x6d && b[i + 1] === 0x76 && b[i + 2] === 0x68 && b[i + 3] === 0x64) {   // mvhd
+              const d = new DataView(b.buffer, i); const secs = b[i + 4] === 1 ? Number(d.getBigUint64(8)) : d.getUint32(8);
+              return secs > 1e8 ? ok(new Date(Date.UTC(1904, 0, 1) + secs * 1000)) : null;
+            }
+            return null;
+          }
+          if (size < 8) return null;
+          pos += size;
+        }
+      }
+    } catch {}
+    return null;
+  }
+
+  /* A content fingerprint: size + a hash of the first and last 64 KB. Cheap even
+     for a 100 MB video, and two different shots won't share it. */
+  async function fingerprint(file) {
+    const parts = [file.slice(0, 65536), file.slice(Math.max(0, file.size - 65536))];
+    const buf = await new Blob(parts).arrayBuffer();
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', buf));
+    return file.size + ':' + [...h.slice(0, 12)].map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /* Is this file already in Photos? Newer records carry a fingerprint; older
+     ones are matched by type + exact size, which is just as telling for
+     camera files of several MB. */
+  function findDuplicate(file, fp) {
+    return Store.list('media', r => !r.doc && (r.fp ? r.fp === fp : r.size === file.size && (r.mime || '') === (file.type || r.mime)))[0] || null;
+  }
+
+  /* Save one picked/captured file. Returns the new media record, or
+     { duplicate: existingRecord } if it's already in Photos. */
   async function add(file, extra = {}) {
+    const fp = await fingerprint(file).catch(() => null);
+    if (!extra.doc && !extra.portrait) {
+      const dup = fp && findDuplicate(file, fp);
+      if (dup) return { duplicate: dup };
+    }
     const isVideo = file.type.startsWith('video');
     const isImage = file.type.startsWith('image');
-    const at = extra.at || new Date(file.lastModified && !extra.fresh ? file.lastModified : Date.now()).toISOString();
+    // When it was actually taken: the camera's own timestamp in the file beats the
+    // file date, which is often just when it was saved or shared.
+    const taken = !extra.fresh && !extra.at ? await takenAt(file) : null;
+    const at = extra.at || (taken || new Date(file.lastModified && !extra.fresh ? file.lastModified : Date.now())).toISOString();
     const t = isVideo ? await videoThumb(file, 420) : isImage ? await imageThumb(file, 420).catch(() => ({ blob: null })) : { blob: null };
     const pet = App.pet();
     const d = new Date(at);
@@ -60,7 +130,7 @@ const Media = (() => {
     const rec = await Store.put({
       kind: 'media', src: Store.dev, at, mime: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
       name, size: file.size, w: t.w, h: t.h, duration: t.duration, video: isVideo,
-      caption: extra.caption || '', portrait: !!extra.portrait, doc: !!extra.doc, star: !!extra.star,
+      caption: extra.caption || '', portrait: !!extra.portrait, doc: !!extra.doc, star: !!extra.star, fp,
     });
     if (t.blob) {
       await Store.blobPut('t:' + rec.id, t.blob);
