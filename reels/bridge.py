@@ -15,10 +15,17 @@ DRIVE = os.path.expanduser('~/Library/CloudStorage/GoogleDrive-efemphotography@g
 DEV = 'claude'
 
 
+try:                       # background jobs (launchd) don't see the terminal's certificate settings
+    import certifi, ssl
+    _SSL = ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+    _SSL = None
+
+
 def call(action, **kw):
     body = json.dumps({'key': KEY, 'action': action, **kw}).encode()
     req = urllib.request.Request(URL, data=body, headers={'Content-Type': 'text/plain;charset=utf-8'})
-    with urllib.request.urlopen(req, timeout=300) as r:
+    with urllib.request.urlopen(req, timeout=300, context=_SSL) as r:
         j = json.loads(r.read())
     if not j.get('ok'):
         raise RuntimeError(j.get('error'))

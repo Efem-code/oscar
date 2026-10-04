@@ -5,3 +5,4 @@ bridge/*.local.gs
 bridge/*.local.txt
 reels/__pycache__/
 reels/out/
+reels/.venv/
