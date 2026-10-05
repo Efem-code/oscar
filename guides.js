@@ -185,7 +185,8 @@ const BEHAVIOUR = [
       'Demand barking: don’t answer it — no looking, talking or shushing (that’s attention too). The moment he’s quiet for 2–3 seconds, give him what he wanted. Expect it to get worse briefly before it stops.',
       'Teach “Quiet”: when he stops barking on his own, say “Quiet”, then treat. Build the gap slowly before the treat.',
       'Boredom: more sniffing and brain games (see Brain games) — a tired brain barks less. Before you leave, give a frozen Kong.',
-      'Window barking: block the view at his height (frosted film, close a blind) so the trigger simply isn’t there.',
+      'Window barking (the most common kind): block the view at his height — frosted film on the lower glass, blinds half-closed in the day, move the couch he uses as a lookout. Give him a bed and a chew away from the windows instead.',
+      '“Look at that”: with the blinds open and you there, the moment he NOTICES someone outside (before barking), “Yes!” and treat. People outside start to mean treats, not trouble.',
       'Being left: practise short absences (Alone 5 min → 30 min in Socialization) and come back calmly. Barking only when alone that’s getting worse is worth a trainer’s help.',
     ],
     jindo: 'Jindos are often wary of strangers and very alert to their territory. Reward calm looking at things outside rather than scolding the bark — shouting tends to sound like joining in.',
@@ -224,6 +225,23 @@ const BEHAVIOUR = [
     mistakes: ['Free-feeding (bowl down all day) — you can’t tell how much he’s eating.', 'Hand-feeding or adding tasty extras every time he refuses.', 'Switching foods suddenly — it can upset his stomach; change over 7–10 days.'],
     vet: 'Call the vet if he skips food for more than a day, or if poor appetite comes with vomiting, diarrhoea, low energy, weight loss, or straining to eat.',
   },
+  {
+    id: 'night', icon: '🌙', title: 'Scared or jumpy at night', when: 'Common in the first weeks — and during an adolescent fear period',
+    why: 'A new home has unfamiliar night sounds, shadows and dark windows that act like mirrors. Many dogs also go through a second “fear period” somewhere between 6 and 14 months, when ordinary things feel scary for a few weeks.',
+    steps: [
+      'Close blinds at dusk — dark windows show reflections and movement he can’t make sense of.',
+      'Use soft lamps instead of full darkness in the evening, and a white-noise machine or fan to mask outside sounds.',
+      'Give him a den: part-cover his crate or bed with a blanket, and keep it near you at night for now.',
+      'Same wind-down every night: last walk and potty, a calm chew or lick mat, then lights down.',
+      'Comfort is fine — calm reassurance doesn’t reward fear. Stay relaxed yourself.',
+      'Make evenings good: a short “find it” treat game after dinner.',
+      'Never force him toward something that scares him; let him watch from a distance and approach on his own.',
+      'Note what sets him off (a sound, a room, a time) with a 📝 Note — patterns make it fixable.',
+    ],
+    jindo: 'Jindos are watchful and sensitive to change. Predictable routines and a safe spot of his own tend to settle them faster than lots of new experiences at once.',
+    mistakes: ['Forcing him to “face” the scary thing.', 'Leaving him alone in a dark room far from you while he’s still settling in.', 'Getting frustrated — he picks up on tension.'],
+    vet: 'See the vet if it hasn’t eased after 2–3 weeks, is getting worse, or comes with trembling, panting, hiding, not settling for long, or bumping into things in dim light — night-time jumpiness can sometimes be a vision or discomfort problem.',
+  }
 ];
 
 /* The Oscar brand, for @kpuposcar — the plan the nightly reels follow. */
