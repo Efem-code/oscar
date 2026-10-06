@@ -95,7 +95,7 @@ function pottyStatus(now = Date.now()) {
 }
 
 /* ---------- state ---------- */
-const ui = { tab: 'today', day: todayKey(), memFilter: 'all', openCats: {} };
+const ui = { tab: 'today', day: todayKey(), memFilter: 'all', openCats: {}, pick: null };   // pick: media ids while choosing shots for a reel
 const view = () => $('#view');
 
 /* ---------- toast ---------- */
@@ -762,9 +762,9 @@ function pottyStats() {
 VIEWS.memories = () => {
   const all = Store.list('media', r => !r.doc);
   const portraits = all.filter(r => r.portrait && !r.video).reverse();
-  const f = ui.memFilter;
+  const f = ui.memFilter, picking = Array.isArray(ui.pick);
   const media = f === 'portraits' ? all.filter(r => r.portrait) : f === 'starred' ? all.filter(r => r.star) : f === 'videos' ? all.filter(r => r.video) : all;
-  const extras = f === 'all' ? [...Store.list('milestone'), ...Store.list('journal')] : f === 'starred' ? Store.list('milestone') : [];
+  const extras = picking ? [] : f === 'all' ? [...Store.list('milestone'), ...Store.list('journal')] : f === 'starred' ? Store.list('milestone') : [];
   const oldest = Store.pref('oscar.photoOrder') === 'oldest';
   const items = [...media, ...extras].sort((a, b) => (a.at < b.at ? 1 : -1) * (oldest ? -1 : 1));
   const groups = [];
@@ -776,6 +776,20 @@ VIEWS.memories = () => {
       groups.push(g = { key, title: `${fmtDay(key)}${w != null && w >= 0 ? ` · ${w} weeks old` : ''}`, items: [] });
     }
     g.items.push(r);
+  }
+  const filters = `<div class="filters"><button class="chip" data-act="photoOrder">${oldest ? '↑ Oldest first' : '↓ Newest first'}</button>${[['all', 'All'], ['starred', '⭐ Starred'], ['portraits', 'Portraits'], ['videos', 'Videos']].map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="memFilter" data-k="${k}">${l}</button>`).join('')}</div>`;
+  if (picking) {               // choosing shots for a reel: tap in play order, numbers show the order
+    const n = id => ui.pick.indexOf(id) + 1;
+    return `${header('Pick the shots')}
+      <section class="card pickhelp"><p><b>Tap photos and videos in the order you want them to play.</b> Mix a few from each day — videos make it funnier. 3 to 20 shots.</p></section>
+      ${filters}
+      ${groups.map(g => `<section class="mgroup"><h3>${esc(g.title)}</h3>
+        <div class="grid">${g.items.map(r => `<button class="gi ${n(r.id) ? 'picked' : ''}" data-act="pickToggle" data-id="${r.id}" ${r.driveId ? '' : 'disabled'}>
+          <div class="th" data-thumb="${r.id}"></div>${r.video ? '<span class="vid">▶</span>' : ''}${n(r.id) ? `<span class="pickn">${n(r.id)}</span>` : ''}${!r.driveId ? '<span class="up" title="Still uploading">⏳</span>' : ''}</button>`).join('')}</div>
+      </section>`).join('')}
+      <div class="pickpad"></div>
+      <div class="pickbar" id="pickbar"><button class="ghost" data-act="pickCancel">Cancel</button><span><b>${ui.pick.length}</b> picked</span>
+        <button class="primary" data-act="pickSend" ${ui.pick.length < 3 ? 'disabled' : ''}>🎬 Next</button></div>`;
   }
   return `${header(all.length === 1 ? "1 memory" : `${all.length} photos & videos`)}
     <section class="capture wide">
@@ -790,7 +804,7 @@ VIEWS.memories = () => {
       <div class="strip">${portraits.map(r => `<button data-act="view" data-id="${r.id}"><div class="th" data-thumb="${r.id}"></div><small>wk ${App.weekOf(r.at) ?? '?'}</small></button>`).join('')}</div></section>`
       : `<section class="card empty"><p><b>Weekly portrait:</b> same spot, same angle, once a week. The camera shows last week’s shot as a ghost so you can line him up — by the end you have a growing-up flipbook.</p><button class="primary" data-act="portrait">Take the first one</button></section>`}
     ${reelsStrip()}
-    <div class="filters"><button class="chip" data-act="photoOrder">${oldest ? '↑ Oldest first' : '↓ Newest first'}</button>${[['all', 'All'], ['starred', '⭐ Starred'], ['portraits', 'Portraits'], ['videos', 'Videos']].map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="memFilter" data-k="${k}">${l}</button>`).join('')}</div>
+    ${filters}
     ${groups.map(g => `<section class="mgroup"><h3>${esc(g.title)}</h3>
       ${g.items.filter(r => r.kind !== 'media').map(memCard).join('')}
       <div class="grid">${g.items.filter(r => r.kind === 'media').map(r => `<button class="gi" data-act="view" data-id="${r.id}">
@@ -804,11 +818,67 @@ VIEWS.memories = () => {
    stays one tap and yours: Share → Instagram, with the caption copied. */
 function reelsStrip() {
   const reels = Store.list('reel').sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0) || (a.option || '').localeCompare(b.option || ''));
-  if (!reels.length) return '';
-  return `<section class="card"><div class="h-row"><h3>🎬 Reels</h3><span class="muted small">made each evening from the day</span></div>
-    <div class="strip">${reels.slice(0, 12).map(r => `<button data-act="reel" data-id="${r.id}"><div class="th reel ${r.posted ? 'posted' : ''}" ${r.thumbId ? `data-thumb="${r.id}"` : ''}>${r.posted ? '<i>✓ posted</i>' : '<i>▶</i>'}</div><small>${r.option ? `<b>Option ${esc(r.option)}</b> · ${esc(r.style || '')}` : fmtDay(localDay(r.at))}</small></button>`).join('')}</div>
+  const reqs = Store.list('reelreq', r => r.status === 'pending' || r.status === 'failed');
+  return `<section class="card"><div class="h-row"><h3>🎬 Reels</h3><button class="pill" data-act="pickStart">＋ Make your own</button></div>
+    ${reels.length || reqs.length ? `<div class="strip">${reqs.map(r => `<button data-act="reelReq" data-id="${r.id}"><div class="th reel ${r.status}"><i>${r.status === 'failed' ? '⚠️' : '⏳'}</i></div><small>${r.status === 'failed' ? 'Didn’t work' : '<b>Making…</b>'}</small></button>`).join('')}${reels.slice(0, 12).map(r => `<button data-act="reel" data-id="${r.id}"><div class="th reel ${r.posted ? 'posted' : ''}" ${r.thumbId ? `data-thumb="${r.id}"` : ''}>${r.posted ? '<i>✓ posted</i>' : '<i>▶</i>'}</div><small>${r.option ? `<b>Option ${esc(r.option)}</b> · ${esc(r.style || '')}` : r.picked ? `<b>Your pick</b> · ${esc(r.style || '')}` : fmtDay(localDay(r.at))}</small></button>`).join('')}</div>`
+      : '<p class="small muted">A funny reel arrives every Wednesday and Sunday evening — or pick the shots yourself and the Mac makes one.</p>'}
     ${reels.some(r => r.group && reels.filter(x => x.group === r.group).length > 1) ? '<p class="small muted">Watch the options, then tap “Use this one” on your favourite — the others are removed.</p>' : ''}</section>`;
 }
+
+/* Make your own: pick shots in play order → a `reelreq` record syncs to Drive →
+   the Mac (reels/reel_requests.py, checks every 2 min) renders it, files the
+   reel(s) under Reels, marks the request done and notifies both phones. */
+const REEL_STYLES = { all: 'All 3 styles', meme: 'Meme', countdown: 'Countdown', story: 'Story' };
+const pickStrip = ids => `<div class="strip picks">${ids.map((id, i) => `<div><div class="th" data-thumb="${id}"></div><small>${i + 1}</small></div>`).join('')}</div>`;
+EARLY_ACT.pickStart = () => { ui.pick = []; render(); scrollTo(0, 0); };
+EARLY_ACT.pickCancel = () => { ui.pick = null; render(); };
+EARLY_ACT.pickToggle = d => {
+  const i = ui.pick.indexOf(d.id);
+  if (i >= 0) ui.pick.splice(i, 1);
+  else if (ui.pick.length >= 20) return toast('20 shots is plenty for one reel');
+  else ui.pick.push(d.id);
+  document.querySelectorAll('.gi[data-act="pickToggle"]').forEach(b => {     // repaint in place, so thumbnails don't reload
+    const n = ui.pick.indexOf(b.dataset.id) + 1, s = b.querySelector('.pickn');
+    b.classList.toggle('picked', n > 0);
+    if (!n) s?.remove();
+    else if (s) s.textContent = n;
+    else b.insertAdjacentHTML('beforeend', `<span class="pickn">${n}</span>`);
+  });
+  const bar = $('#pickbar');
+  if (bar) { bar.querySelector('b').textContent = ui.pick.length; bar.querySelector('[data-act="pickSend"]').disabled = ui.pick.length < 3; }
+};
+EARLY_ACT.pickSend = () => {
+  const ids = ui.pick.slice();
+  form({
+    title: `🎬 A reel from ${ids.length} shots`,
+    intro: `${pickStrip(ids)}<p class="small muted">They play in the order you tapped them.${ids.some(id => Store.get(id)?.video) ? '' : ' Tip: a video or two makes it funnier.'}</p>`,
+    fields: [
+      { k: 'style', label: 'Style', type: 'chips', def: 'all', options: [['all', 'All 3 — I’ll choose'], ['meme', '😂 Meme'], ['countdown', '🔢 Countdown'], ['story', '📖 Story']] },
+      { k: 'title', label: 'Opening text', hint: 'optional — leave blank for a meme hook', ph: 'e.g. OSCAR VS THE VACUUM' },
+    ],
+    saveLabel: 'Send to the Mac',
+    onSave: async v => {
+      await Store.put({ kind: 'reelreq', items: ids, style: v.style || 'all', title: v.title, status: 'pending' });
+      ui.pick = null; render();
+      toast('Sent! It takes about 10 minutes — you’ll get a notification');
+      Drive.sync();
+    },
+  });
+  Media.hydrate($('#sheet-body'));
+};
+EARLY_ACT.reelReq = d => {
+  const r = Store.get(d.id); if (!r) return;
+  const failed = r.status === 'failed';
+  sheet(`<h2>🎬 ${failed ? 'That reel didn’t work' : 'Making your reel…'}</h2>
+    <p class="muted">${r.items.length} shots · ${esc(REEL_STYLES[r.style] || r.style)}${r.title ? ` · “${esc(r.title)}”` : ''} · sent ${fmtWhen(r.at)} by ${esc(r.author || r.by || '')}</p>
+    <p class="small ${failed ? '' : 'muted'}">${failed ? esc(r.error || 'Something went wrong on the Mac.') : 'The Mac checks every couple of minutes while it’s awake, then takes about 10 minutes. You’ll get a notification when it’s ready.'}</p>
+    ${pickStrip(r.items)}
+    <div class="btns"><button class="ghost" id="rq-cancel">${failed ? 'Remove' : 'Cancel it'}</button><span class="grow"></span>${failed ? '<button class="primary" id="rq-retry">Try again</button>' : ''}</div>`, root => {
+    Media.hydrate(root);
+    $('#rq-cancel', root).onclick = async () => { await Store.remove(r.id); closeSheet(); Drive.sync(); };
+    $('#rq-retry', root) && ($('#rq-retry', root).onclick = async () => { await Store.put({ id: r.id, status: 'pending', error: '' }); closeSheet(); toast('Sent again'); Drive.sync(); });
+  });
+};
 EARLY_ACT.photoOrder = () => { Store.setPref('oscar.photoOrder', Store.pref('oscar.photoOrder') === 'oldest' ? 'newest' : 'oldest'); render(); };
 EARLY_ACT.reel = async d => {
   const r = Store.get(d.id); if (!r) return;

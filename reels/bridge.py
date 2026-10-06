@@ -12,6 +12,7 @@ KEY = re.search(r"^const SECRET = '([^']+)'", SRC, re.M).group(1)
 MAC = (re.search(r"^const MAC_SECRET = '([^']+)'", SRC, re.M) or [None, None])[1]
 CONN = json.loads(__import__('base64').urlsafe_b64decode(open(os.path.join(HERE, '..', 'bridge', 'connection.local.txt')).read().strip() + '=='))
 URL = CONN['u']
+FOLDER = re.search(r"^const FOLDER_ID = '([^']+)'", SRC, re.M).group(1)
 DRIVE = os.path.expanduser('~/Library/CloudStorage/GoogleDrive-efemphotography@gmail.com/My Drive/Oscar ')
 DEV = 'claude'
 
@@ -72,9 +73,17 @@ def save(changed):
     an empty file. A write that doesn't match is repeated, and a file that is
     already unreadable is rebuilt from its last good version first, so the
     records in it are never thrown away."""
-    import time
+    import fcntl
     if not changed:
         return 0
+    os.makedirs(CACHE, exist_ok=True)
+    with open(os.path.join(CACHE, 'save.lock'), 'w') as lock:      # one Mac job at a time: read, merge, write
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return _save(changed)
+
+
+def _save(changed):
+    import time
     month = now_iso()[:7]
     name = f'log-{DEV}-{month}.json'
     _, files = records()
@@ -138,9 +147,23 @@ CACHE = os.path.join(HERE, 'cache')
 
 
 def token():
+    """A short-lived Drive token from the bridge, reused for 40 min — kept on disk
+    too, so the every-2-minute request check doesn't ask the bridge each time."""
     import time
+    path = os.path.join(CACHE, 'token.json')
+    if not _tok['t'] or time.time() - _tok['at'] > 2400:
+        try:
+            with open(path) as f:
+                t = json.load(f)
+            if time.time() - t['at'] < 2400:
+                _tok.update(t)
+        except (OSError, ValueError, KeyError):
+            pass
     if not _tok['t'] or time.time() - _tok['at'] > 2400:
         _tok['t'], _tok['at'] = call('token', mac=MAC)['token'], time.time()
+        os.makedirs(CACHE, exist_ok=True)
+        with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w') as f:
+            json.dump(_tok, f)
     return _tok['t']
 
 

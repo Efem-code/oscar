@@ -408,3 +408,17 @@ ol.steps li { margin-bottom: 6px; }
 
 .block-btn { display: block; width: 100%; margin: 10px 0; }
 .strip small b { color: var(--accent); }
+
+/* make-your-own reel: picking shots */
+.pickhelp p { margin: 0; }
+.gi.picked .th { outline: 3px solid var(--accent); outline-offset: -3px; }
+.gi .pickn { position: absolute; left: 5px; top: 4px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--accent); color: var(--accent-ink); font-weight: 750; font-size: 12.5px; display: grid; place-items: center; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.gi[disabled] { opacity: .45; }
+.pickpad { height: 84px; }
+.pickbar { position: fixed; left: 0; right: 0; bottom: calc(58px + env(safe-area-inset-bottom)); z-index: 11; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--card); border-top: 1px solid var(--line); box-shadow: 0 -6px 16px rgba(0,0,0,.08); }
+.pickbar span { flex: 1; text-align: center; color: var(--muted); }
+.pickbar span b { color: var(--ink, inherit); font-size: 17px; }
+.strip.picks { margin: 6px 0 4px; }
+.strip.picks > div { flex: 0 0 64px; text-align: center; }
+.strip.picks .th { width: 64px; border-radius: 6px; }
+.th.reel.pending, .th.reel.failed { background: var(--soft); }
