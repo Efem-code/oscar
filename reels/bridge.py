@@ -3,7 +3,7 @@
 The Mac writes its changes as its own "device" file, log-claude-YYYY-MM.json,
 so the phones merge them like edits from a third phone (newest wins).
 """
-import json, os, re, subprocess, urllib.request
+import json, os, re, subprocess, sys, urllib.request
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -24,29 +24,37 @@ except ImportError:
 
 
 def call(action, **kw):
-    """One bridge request; retried a few times because Apps Script sometimes answers with an error page."""
+    """One bridge request. Apps Script sometimes answers with an error page or a
+    404 for a minute or two, so it's retried with growing pauses (~4 min in all)."""
     import time
     body = json.dumps({'key': KEY, 'action': action, **kw}).encode()
-    for attempt in range(4):
+    for attempt in range(7):
         try:
             req = urllib.request.Request(URL, data=body, headers={'Content-Type': 'text/plain;charset=utf-8'})
             with urllib.request.urlopen(req, timeout=300, context=_SSL) as r:
                 j = json.loads(r.read())
             break
         except (ValueError, OSError) as e:
-            if attempt == 3:
+            if attempt == 6:
                 raise
-            time.sleep(3 * (attempt + 1))
+            time.sleep(min(5 * 2 ** attempt, 60))
     if not j.get('ok'):
         raise RuntimeError(j.get('error'))
     return j
 
 
 def records():
-    """Every record, merged newest-wins across all phones' files."""
+    """Every record, merged newest-wins across all phones' files. A file that
+    can't be read is skipped (like the phones do) and flagged 'bad'."""
     out, files = {}, call('pull', seen={}, skip='zzz')['files']
     for f in files:
-        for r in json.loads(f['text']).get('recs', []):
+        try:
+            recs = json.loads(f['text']).get('recs', [])
+        except (TypeError, ValueError):
+            f['bad'] = True
+            print(f"warning: {f['name']} can't be read — skipped", file=sys.stderr, flush=True)
+            continue
+        for r in recs:
             c = out.get(r['id'])
             if not c or (r['updated'], r['dev']) > (c['updated'], c['dev']):
                 out[r['id']] = r
@@ -58,19 +66,47 @@ def now_iso():
 
 
 def save(changed):
-    """Write changed records into this Mac's own file, keeping what it wrote before."""
+    """Write changed records into this Mac's own file, keeping what it wrote before.
+
+    Every write is read back from Drive: on 2026-10-05 a 30 KB write landed as
+    an empty file. A write that doesn't match is repeated, and a file that is
+    already unreadable is rebuilt from its last good version first, so the
+    records in it are never thrown away."""
+    import time
     if not changed:
         return 0
     month = now_iso()[:7]
     name = f'log-{DEV}-{month}.json'
     _, files = records()
     mine = next((f for f in files if f['name'] == name), None)
-    keep = {r['id']: r for r in (json.loads(mine['text'])['recs'] if mine else [])}
+    old = (last_good(mine['id']) if mine.get('bad') else json.loads(mine['text'])['recs']) if mine else []
+    keep = {r['id']: r for r in old}
     for r in changed:
         r = dict(r, updated=now_iso(), dev=DEV, by='Claude')
         keep[r['id']] = r
-    call('write', name=name, text=json.dumps({'v': 1, 'dev': DEV, 'by': 'Claude', 'shard': month, 'recs': list(keep.values())}), id=mine['id'] if mine else None)
-    return len(changed)
+    text = json.dumps({'v': 1, 'dev': DEV, 'by': 'Claude', 'shard': month, 'recs': list(keep.values())})
+    fid = mine['id'] if mine else None
+    for attempt in range(3):
+        fid = call('write', name=name, text=text, id=fid)['id']
+        time.sleep(2)
+        if drive_get(f'files/{fid}?alt=media') == text.encode():
+            return len(changed)
+        print(f'warning: {name} did not save cleanly — writing it again', file=sys.stderr, flush=True)
+    raise RuntimeError(f'{name} would not save — check Drive')
+
+
+def last_good(file_id):
+    """Records from the newest version of a file that still reads as JSON."""
+    revs = json.loads(drive_get(f'files/{file_id}/revisions?fields=revisions(id,size)&pageSize=200'))['revisions']
+    for rev in reversed(revs):
+        if int(rev.get('size') or 0) > 0:
+            try:
+                recs = json.loads(drive_get(f"files/{file_id}/revisions/{rev['id']}?alt=media"))['recs']
+            except (ValueError, KeyError):
+                continue
+            print(f'recovered {len(recs)} records from an earlier version of the file', file=sys.stderr, flush=True)
+            return recs
+    raise RuntimeError("the Mac's sync file is unreadable and has no good earlier version — not writing over it")
 
 
 def drive_id(path):
@@ -108,6 +144,13 @@ def token():
     return _tok['t']
 
 
+def drive_get(path):
+    """GET from the Drive API (path after /drive/v3/) as bytes."""
+    req = urllib.request.Request('https://www.googleapis.com/drive/v3/' + path, headers={'Authorization': 'Bearer ' + token()})
+    with urllib.request.urlopen(req, timeout=120, context=_SSL) as r:
+        return r.read()
+
+
 def download(file_id, ext=''):
     """Cached local copy of a Drive file."""
     os.makedirs(CACHE, exist_ok=True)
@@ -124,6 +167,17 @@ def download(file_id, ext=''):
                 break
             f.write(b)
     os.replace(tmp, path)
+    return path
+
+
+def head(file_id, ext='', n=1 << 20):
+    """The first n bytes of a Drive file as a temp file — a video's dates sit at the start."""
+    os.makedirs(CACHE, exist_ok=True)
+    path = os.path.join(CACHE, f'{file_id}.head{ext}')
+    req = urllib.request.Request(f'https://www.googleapis.com/drive/v3/files/{file_id}?alt=media&supportsAllDrives=true',
+                                 headers={'Authorization': 'Bearer ' + token(), 'Range': f'bytes=0-{n - 1}'})
+    with urllib.request.urlopen(req, timeout=120, context=_SSL) as r, open(path, 'wb') as f:
+        f.write(r.read())
     return path
 
 

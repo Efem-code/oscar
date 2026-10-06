@@ -1,4 +1,13 @@
-"""Re-date photos/videos by when they were actually taken (not when uploaded)."""
+"""Re-date photos/videos by when they were actually taken (not when uploaded).
+
+Photos are read from this Mac's Google Drive folder. Videos are read straight
+from Drive, just their first MB (where the dates are), so nothing big is
+downloaded; that also catches iPhone videos, whose filming time is Apple's
+'creationdate' tag rather than the upload-time 'mvhd' date.
+
+    python3 fix_dates.py --dry   # list what would change
+"""
+import os
 from datetime import datetime, timezone, timedelta
 import bridge
 from capture_time import capture_time
@@ -10,11 +19,18 @@ changed, same, unknown, missing = [], 0, 0, 0
 for r in recs.values():
     if r.get('kind') != 'media' or r.get('deleted') or not r.get('driveId'):
         continue
-    p = local.get(r['driveId'])
-    if not p:
+    p, t = local.get(r['driveId']), None
+    if r.get('video'):
+        try:
+            h = bridge.head(r['driveId'], os.path.splitext(r.get('name') or '')[1].lower())
+            t = capture_time(h)
+            os.remove(h)
+        except Exception as e:
+            print('could not read', r.get('name'), e)
+    if not t and not p:
         missing += 1
         continue
-    t = capture_time(p)
+    t = t or capture_time(p)
     if not t or t > now + timedelta(hours=1) or t.year < 2020:   # no date, or a nonsense one
         unknown += 1
         continue

@@ -1,10 +1,12 @@
 """When a photo or video was actually taken, read from the file itself.
 
 JPEG: EXIF DateTimeOriginal (local time, as the camera wrote it).
-MP4/MOV: the 'mvhd' creation time (seconds since 1904, UTC).
+MP4/MOV: Apple's 'creationdate' tag when present (iPhone — the real filming
+time), else the 'mvhd' creation time (seconds since 1904, UTC). A video picked
+on an iPhone is re-exported for upload, so its mvhd says the upload moment.
 Pure stdlib, so it runs anywhere without installs.
 """
-import struct
+import re, struct
 from datetime import datetime, timezone, timedelta
 
 
@@ -43,6 +45,52 @@ def jpeg_time(path):
     return None
 
 
+def _kids(b, start, end):
+    """{box type: (start, end)} for the boxes laid end to end in b[start:end]."""
+    out, p = {}, start
+    while p + 8 <= end:
+        size, kind = struct.unpack('>I4s', b[p:p + 8])
+        if size < 8:
+            break
+        out.setdefault(kind, (p, min(p + size, end)))
+        p += size
+    return out
+
+
+def apple_date(moov):
+    """Apple's com.apple.quicktime.creationdate (moov › meta › keys + ilst), as UTC."""
+    meta = _kids(moov, 8, len(moov)).get(b'meta')
+    if not meta:
+        return None
+    k = _kids(moov, meta[0] + (8 if moov[meta[0] + 12:meta[0] + 16] == b'hdlr' else 12), meta[1])
+    if b'keys' not in k or b'ilst' not in k:
+        return None
+    p, idx = k[b'keys'][0] + 16, None
+    for i in range(1, struct.unpack('>I', moov[k[b'keys'][0] + 12:k[b'keys'][0] + 16])[0] + 1):
+        size = struct.unpack('>I', moov[p:p + 4])[0]
+        if size < 8:
+            return None
+        if moov[p + 8:p + size] == b'com.apple.quicktime.creationdate':
+            idx = i
+            break
+        p += size
+    p, end = k[b'ilst'][0] + 8, k[b'ilst'][1]
+    while idx and p + 8 <= end:                     # each item's box type is its key number
+        size, num = struct.unpack('>II', moov[p:p + 8])
+        if size < 8:
+            break
+        if num == idx:                              # → 'data' box: size, 'data', type, locale, value
+            dsize = struct.unpack('>I', moov[p + 8:p + 12])[0]
+            m = re.match(rb'(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)([+-])(\d\d):?(\d\d)', moov[p + 24:p + 8 + dsize])
+            if not m:
+                return None
+            y, mo, d, h, mi, sec = (int(x) for x in m.groups()[:6])
+            off = timedelta(hours=int(m[8]), minutes=int(m[9])) * (-1 if m[7] == b'-' else 1)
+            return datetime(y, mo, d, h, mi, sec, tzinfo=timezone(off)).astimezone(timezone.utc)
+        p += size
+    return None
+
+
 def mp4_time(path):
     with open(path, 'rb') as f:
         f.seek(0, 2)
@@ -56,7 +104,14 @@ def mp4_time(path):
             elif size == 0:
                 size = end - pos
             if kind == b'moov':
-                body = f.read(min(size, 1 << 20))
+                f.seek(pos)
+                body = f.read(min(size, 8 << 20))
+                try:
+                    t = apple_date(body)
+                except (struct.error, ValueError):
+                    t = None
+                if t:
+                    return t
                 i = body.find(b'mvhd')
                 if i < 0:
                     return None

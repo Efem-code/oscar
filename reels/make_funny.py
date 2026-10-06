@@ -8,9 +8,10 @@ joke labels from what was logged → the punchline: it ends on a nap.
     python3 make_funny.py            # since the last funny reel (up to 4 days)
     python3 make_funny.py --preview  # render into reels/out only
     python3 make_funny.py --dry      # show the plan
+    python3 make_funny.py --day=2026-10-05   # rebuild that day's options
 """
 import os, random, shutil, sys, tempfile
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import bridge
 import make_reel as R
@@ -44,12 +45,12 @@ def joke(rec, recs, used):
     if rec.get('caption') and len(rec['caption']) <= 28:
         return rec['caption'].lower()
     t = datetime.fromisoformat(rec['at'].replace('Z', '+00:00'))
-    best, gap = None, 20 * 60
+    best, gap, sleeping = None, 20 * 60, asleep(rec, recs)
     for r in recs.values():
         if r.get('deleted') or r.get('kind') not in ('log', 'train', 'lesson'):
             continue
         k = 'train' if r['kind'] in ('train', 'lesson') else r.get('type')
-        if k not in JOKES or not r.get('at'):
+        if k not in JOKES or not r.get('at') or (k == 'sleep' and not sleeping):     # nap jokes only on a sleeping Oscar
             continue
         try:
             d = abs((datetime.fromisoformat(r['at'].replace('Z', '+00:00')) - t).total_seconds())
@@ -61,6 +62,27 @@ def joke(rec, recs, used):
         return None
     options = [j for j in JOKES[best] if j not in used]
     return options[0] if options else None          # never repeat a joke in one reel
+
+
+def _t(iso):
+    return datetime.fromisoformat(iso.replace('Z', '+00:00'))
+
+
+def asleep(rec, recs):
+    """Taken while Oscar was logged asleep: after a sleep log and before the next wake.
+    A Nap tapped within 3 min of Awake is a slip of the finger, not a nap, and a
+    daytime nap with no Awake logged only counts for 2½ h."""
+    ev = []
+    for at, kind in sorted((r['at'], r['type']) for r in recs.values() if r.get('kind') == 'log' and not r.get('deleted')
+                           and r.get('type') in ('sleep', 'wake') and r.get('at')):
+        if kind == 'sleep' and ev and ev[-1][1] == 'wake' and (_t(at) - _t(ev[-1][0])).total_seconds() < 180:
+            continue
+        ev.append((at, kind))
+    last = max((e for e in ev if e[0] <= rec['at']), default=None)
+    if not last or last[1] != 'sleep':
+        return False
+    start = _t(last[0]).astimezone(TZ)
+    return (_t(rec['at']) - _t(last[0])).total_seconds() < (2.5 if 7 <= start.hour < 19 else 10) * 3600
 
 
 def window(recs, today):
@@ -88,12 +110,19 @@ def candidates(days, recs):
             if info['dur'] < 1.2:
                 continue
             vals = motion(p, info['dur'])
-            vids.append({'rec': r, 'path': p, 'info': info, 'vals': vals, 'energy': (sum(vals) / len(vals) if vals else 0) + (8 if r.get('star') else 0)})
+            x = {'rec': r, 'path': p, 'info': info, 'vals': vals, 'energy': (sum(vals) / len(vals) if vals else 0) + (8 if r.get('star') else 0)}
+            (naps if asleep(r, recs) else vids).append(x)
         else:
             x = {'rec': r, 'path': p, 'score': 6 if r.get('star') else 0}
-            (naps if joke(r, recs, set()) in JOKES['sleep'] else pics).append(x)
+            (naps if asleep(r, recs) else pics).append(x)
     vids.sort(key=lambda v: -v['energy']); pics.sort(key=lambda x: -x['score'])
+    naps.sort(key=lambda x: (not x['rec'].get('video'), x['rec']['at']))     # a sleeping video beats a photo
     return vids, pics, naps
+
+
+def nap_end(naps, length, label):
+    """The punchline shot: Oscar asleep, as a clip or a photo."""
+    return [dict(clip(x, length) if x['rec'].get('video') else photo(x, length), label=label) for x in naps[:1]]
 
 
 def clip(v, length):
@@ -111,8 +140,8 @@ def option_meme(vids, pics, naps, recs, k):
     items = [clip(v, CLIP) for v in vids[:6]] + [photo(x, PHOTO) for x in pics[:3]]
     hook, middle = items[0], items[1:]
     random.seed(k); random.shuffle(middle)
-    end = [photo(x, 1.8, 'battery: 0%') for x in naps[:1]] or [photo(x, 1.8, 'and scene.') for x in pics[3:4]]
-    used = set()
+    end = nap_end(naps, 1.8, 'battery: 0%') or [photo(x, 1.8, 'and scene.') for x in pics[3:4]]
+    used = {x['label'] for x in end}
     for x in middle:
         x['label'] = joke(x['rec'], recs, used)
         if x['label']: used.add(x['label'])
@@ -136,11 +165,13 @@ def option_story(vids, pics, naps, recs, k, breed):
     pool.sort(key=lambda x: x['rec']['at'])                          # tell it in the order it happened
     for x in pool:
         x['label'] = R.clip_label(x['rec'], recs)
+        if x['label'] == R.LABELS['sleep'] and not asleep(x['rec'], recs):
+            x['label'] = None
     prev = None
     for x in pool:
         if x['label'] == prev: x['label'] = None
         else: prev = x['label']
-    end = [photo(x, 2.0, 'worth it') for x in naps[:1]]
+    end = nap_end(naps, 2.0, 'worth it') or [photo(x, 2.0, 'worth it') for x in pics[4:5]]
     return {'key': 'C', 'style': 'Story', 'badge': ('POV: YOU ADOPTED', f'A {breed.upper()}'), 'items': pool + end,
             'opener': f'Nobody warned us how much personality fits in one {breed} 🐾', 'punch': False}
 
@@ -155,7 +186,8 @@ def punch_in(x, out):
 
 def main():
     dry, preview = '--dry' in sys.argv, '--preview' in sys.argv
-    today = datetime.now(TZ).date()
+    day = next((a.split('=', 1)[1] for a in sys.argv if a.startswith('--day=')), None)
+    today = date.fromisoformat(day) if day else datetime.now(TZ).date()
     if not dry and not preview:
         try:
             import backfill_thumbs; backfill_thumbs.main()

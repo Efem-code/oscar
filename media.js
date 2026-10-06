@@ -47,9 +47,43 @@ const Media = (() => {
   };
   const safe = s => (s || '').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 60);
 
-  /* Capture time from the file itself: JPEG EXIF DateTimeOriginal, or an MP4/MOV
-     'mvhd' creation time. Returns a Date, or null when the file doesn't say
-     (shared/re-saved files often don't) or says something impossible. */
+  /* iPhone videos: Apple's 'creationdate' tag (moov › meta › keys + ilst) is when it
+     was filmed. A video picked on an iPhone is re-exported for upload, so its mvhd
+     time is the upload moment — that put Shae's clips on the wrong days. */
+  function appleDate(b) {
+    const v = new DataView(b.buffer, b.byteOffset, b.byteLength), str = (p, n) => String.fromCharCode(...b.subarray(p, p + n));
+    const kids = (from, to) => {
+      const o = {};
+      for (let p = from; p + 8 <= to;) { const s = v.getUint32(p); if (s < 8) break; o[str(p + 4, 4)] = o[str(p + 4, 4)] || [p, Math.min(p + s, to)]; p += s; }
+      return o;
+    };
+    const meta = kids(8, b.length).meta;
+    if (!meta) return null;
+    const k = kids(meta[0] + (str(meta[0] + 12, 4) === 'hdlr' ? 8 : 12), meta[1]);
+    if (!k.keys || !k.ilst) return null;
+    let p = k.keys[0] + 16, idx = 0;
+    for (let i = 1, n = v.getUint32(k.keys[0] + 12); i <= n && p + 8 <= k.keys[1]; i++) {
+      const s = v.getUint32(p); if (s < 8) return null;
+      if (str(p + 8, s - 8) === 'com.apple.quicktime.creationdate') { idx = i; break; }
+      p += s;
+    }
+    for (let q = k.ilst[0] + 8; idx && q + 8 <= k.ilst[1];) {     // each item's box type is its key number
+      const s = v.getUint32(q); if (s < 8) break;
+      if (v.getUint32(q + 4) === idx) {                            // → 'data' box: size, 'data', type, locale, value
+        const m = str(q + 24, Math.min(v.getUint32(q + 8), 64) - 16).match(/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)([+-])(\d\d):?(\d\d)/);
+        if (!m) return null;
+        const off = (m[7] === '-' ? -1 : 1) * (+m[8] * 60 + +m[9]);
+        return new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]) - off * 60000);
+      }
+      q += s;
+    }
+    return null;
+  }
+
+  /* Capture time from the file itself: JPEG/HEIC EXIF DateTimeOriginal, or for
+     MP4/MOV Apple's creationdate, else the 'mvhd' creation time. Returns a Date,
+     or null when the file doesn't say (shared/re-saved files often don't) or
+     says something impossible. */
   async function takenAt(file) {
     try {
       const ok = d => d && d.getFullYear() >= 2015 && d.getTime() < Date.now() + 36e5 ? d : null;
@@ -89,7 +123,10 @@ const Media = (() => {
           let size = h.getUint32(0); const kind = String.fromCharCode(h.getUint8(4), h.getUint8(5), h.getUint8(6), h.getUint8(7));
           if (size === 1) size = Number(h.getBigUint64(8)); else if (size === 0) size = file.size - pos;
           if (kind === 'moov') {
-            const b = new Uint8Array(await file.slice(pos, pos + Math.min(size, 1 << 20)).arrayBuffer());
+            const b = new Uint8Array(await file.slice(pos, pos + Math.min(size, 8 << 20)).arrayBuffer());
+            let apple = null;
+            try { apple = appleDate(b); } catch {}
+            if (apple) return ok(apple);
             for (let i = 0; i < b.length - 16; i++) if (b[i] === 0x6d && b[i + 1] === 0x76 && b[i + 2] === 0x68 && b[i + 3] === 0x64) {   // mvhd
               const d = new DataView(b.buffer, i); const secs = b[i + 4] === 1 ? Number(d.getBigUint64(8)) : d.getUint32(8);
               return secs > 1e8 ? ok(new Date(Date.UTC(1904, 0, 1) + secs * 1000)) : null;
