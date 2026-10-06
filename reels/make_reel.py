@@ -464,6 +464,12 @@ def main():
     preview = '--preview' in sys.argv          # render into reels/out only — no Drive, no app
     day = args[0] if args else datetime.now(TZ).date().isoformat()
     log('reel for', day)
+    if not dry and not preview:
+        try:                                             # previews the phones couldn't make (HEIC, HEVC)
+            import backfill_thumbs
+            backfill_thumbs.main()
+        except Exception as e:
+            log('preview backfill skipped:', e)
     recs, _ = bridge.records()
     local = {}
     bridge.prune_cache()
