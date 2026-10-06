@@ -352,11 +352,11 @@ def _font(spec, size):
     return ImageFont.truetype(spec[0], size, index=spec[1])
 
 
-def theme_badge(big, small, path):
+def theme_badge(big, small, path, sub=54):
     """DAY 3 stamp + subtitle, upper third, for the opening seconds."""
     from PIL import Image, ImageDraw
     img = Image.new('RGBA', (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(img)
-    fb, fs = _font(F_DISPLAY, 170), _font(F_TEXT, 54)
+    fb, fs = _font(F_DISPLAY, 170), (_font(F_DISPLAY, sub) if sub > 60 else _font(F_TEXT, sub))
     while d.textlength(big, font=fb) > W - 200: fb = _font(F_DISPLAY, fb.size - 8)
     bw = d.textlength(big, font=fb); pad = 46
     x0, y0 = (W - bw) / 2 - pad, H * 0.12
@@ -364,7 +364,7 @@ def theme_badge(big, small, path):
     d.rounded_rectangle([x0, y0, x0 + bw + 2 * pad, y0 + asc + desc + 20], radius=36, fill=TERRA + (240,))
     d.text(((W - bw) / 2, y0 + 8), big, font=fb, fill=CREAM)
     if small:
-        while d.textlength(small, font=fs) > W - 140: fs = _font(F_TEXT, fs.size - 4)
+        while d.textlength(small, font=fs) > W - 140: fs = _font(F_DISPLAY if sub > 60 else F_TEXT, fs.size - 4)
         sw = d.textlength(small, font=fs)
         d.text(((W - sw) / 2, y0 + asc + desc + 50), small, font=fs, fill=(255, 255, 255), stroke_width=5, stroke_fill=(0, 0, 0, 140))
     img.save(path)
@@ -381,7 +381,7 @@ def theme_tag(text, path):
     img.save(path)
 
 
-def theme_end(name, path):
+def theme_end(name, path, signoff='see you tomorrow'):
     """Closing card: paw logo, handle, sign-off — same every day."""
     from PIL import Image, ImageDraw
     img = Image.new('RGB', (W, H), CREAM); d = ImageDraw.Draw(img)
@@ -390,7 +390,7 @@ def theme_end(name, path):
         img.paste(icon, ((W - 300) // 2, int(H * 0.30)), icon)
     except Exception:
         pass
-    for text, spec, size, y, col in [(f"{name}'s Diary".upper(), F_DISPLAY, 110, 0.49, TERRA), (HANDLE, F_TEXT, 64, 0.57, INK), ('see you tomorrow', F_TEXT, 44, 0.62, (133, 118, 106))]:
+    for text, spec, size, y, col in [(f"{name}'s Diary".upper(), F_DISPLAY, 110, 0.49, TERRA), (HANDLE, F_TEXT, 64, 0.57, INK), (signoff, F_TEXT, 44, 0.62, (133, 118, 106))]:
         f = _font(spec, size); tw = d.textlength(text, font=f)
         d.text(((W - tw) / 2, H * y), text, font=f, fill=col)
     img.save(path)
@@ -402,7 +402,7 @@ def render_card(png, dur, out):
          '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-r', str(FPS), '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2', '-shortest', out])
 
 
-def render(items, lines, out, badge=None, tag='', name='Oscar'):
+def render(items, lines, out, badge=None, tag='', name='Oscar', signoff='see you tomorrow', sub=54):
     """Cut the clips together in the Diary theme. Returns the length in seconds."""
     tmp = tempfile.mkdtemp(prefix='oscar-reel-')
     try:
@@ -412,7 +412,7 @@ def render(items, lines, out, badge=None, tag='', name='Oscar'):
             render_segment(x, p)
             parts.append((p, x['len']))
         end_png, end_mp4 = os.path.join(tmp, 'end.png'), os.path.join(tmp, 'end.mp4')
-        theme_end(name, end_png); render_card(end_png, 1.8, end_mp4)
+        theme_end(name, end_png, signoff); render_card(end_png, 1.8, end_mp4)
         parts.append((end_mp4, 1.8))
 
         # Crossfade chain: each join overlaps the clips by XF seconds.
@@ -431,7 +431,7 @@ def render(items, lines, out, badge=None, tag='', name='Oscar'):
 
         bpng, tpng = os.path.join(tmp, 'badge.png'), os.path.join(tmp, 'tag.png')
         big, small = badge if badge else (lines[0], lines[1] if len(lines) > 1 else '')
-        theme_badge(big, small, bpng); theme_tag(tag or f"{name.upper()}'S DIARY", tpng)
+        theme_badge(big, small, bpng, sub); theme_tag(tag or f"{name.upper()}'S DIARY", tpng)
         n = len(parts)
         vf.append(f"{vprev}{GRADE}[g]")
         vf.append(f"[g][{n}:v]overlay=0:0:enable='lt(t,{hook_end:.2f})'[b]")
