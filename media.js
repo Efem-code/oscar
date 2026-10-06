@@ -53,8 +53,20 @@ const Media = (() => {
   async function takenAt(file) {
     try {
       const ok = d => d && d.getFullYear() >= 2015 && d.getTime() < Date.now() + 36e5 ? d : null;
-      if (/jpe?g/i.test(file.type)) {
-        const v = new DataView(await file.slice(0, 256 * 1024).arrayBuffer());
+      // JPEG and iPhone HEIC/HEIF both carry an EXIF block ("Exif\\0\\0" + TIFF). In JPEG it's at the
+      // start; iPhone HEIC can keep it anywhere (often mid-file), so scan in 1 MB steps until found.
+      const isPhoto = /jpe?g|hei[cf]/i.test(file.type) || /\.(jpe?g|hei[cf])$/i.test(file.name || '');
+      const exifAt = async () => {
+        for (let off = 0; off < file.size; off += 1 << 20) {
+          const b = new Uint8Array(await file.slice(off, off + (1 << 20) + 8).arrayBuffer());
+          for (let i = 0; i < b.length - 6; i++) if (b[i] === 0x45 && b[i + 1] === 0x78 && b[i + 2] === 0x69 && b[i + 3] === 0x66 && b[i + 4] === 0 && b[i + 5] === 0) return off + i;
+          if (/jpe?g/i.test(file.type) && off >= 256 * 1024) return -1;      // JPEG EXIF is always near the start
+        }
+        return -1;
+      };
+      const at0 = isPhoto ? await exifAt() : -1;
+      for (const part of at0 >= 0 ? [file.slice(Math.max(0, at0 - 2), at0 + 256 * 1024)] : []) {
+        const v = new DataView(await part.arrayBuffer());
         for (let i = 2; i < v.byteLength - 10; i++) {
           if (v.getUint32(i) !== 0x45786966 || v.getUint16(i + 4) !== 0) continue;      // "Exif\0\0"
           const t = i + 6, le = v.getUint16(t) === 0x4949;
@@ -67,7 +79,7 @@ const Media = (() => {
             const m = s.match(/(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/);
             if (m) return ok(new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]));   // camera local time
           }
-          return null;
+          break;
         }
       }
       if (/video\//i.test(file.type)) {

@@ -24,10 +24,19 @@ except ImportError:
 
 
 def call(action, **kw):
+    """One bridge request; retried a few times because Apps Script sometimes answers with an error page."""
+    import time
     body = json.dumps({'key': KEY, 'action': action, **kw}).encode()
-    req = urllib.request.Request(URL, data=body, headers={'Content-Type': 'text/plain;charset=utf-8'})
-    with urllib.request.urlopen(req, timeout=300, context=_SSL) as r:
-        j = json.loads(r.read())
+    for attempt in range(4):
+        try:
+            req = urllib.request.Request(URL, data=body, headers={'Content-Type': 'text/plain;charset=utf-8'})
+            with urllib.request.urlopen(req, timeout=300, context=_SSL) as r:
+                j = json.loads(r.read())
+            break
+        except (ValueError, OSError) as e:
+            if attempt == 3:
+                raise
+            time.sleep(3 * (attempt + 1))
     if not j.get('ok'):
         raise RuntimeError(j.get('error'))
     return j

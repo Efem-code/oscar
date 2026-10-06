@@ -9,8 +9,9 @@ from datetime import datetime, timezone, timedelta
 
 
 def jpeg_time(path):
+    """EXIF DateTimeOriginal from a JPEG or HEIC (HEIC may keep EXIF near the end)."""
     with open(path, 'rb') as f:
-        data = f.read(256 * 1024)
+        data = f.read()                              # HEIC can keep EXIF mid-file
     i = data.find(b'Exif\x00\x00')
     if i < 0:
         return None
@@ -74,7 +75,7 @@ def capture_time(path):
     """A timezone-aware UTC datetime, or None. EXIF times are taken as Pacific local."""
     low = path.lower()
     try:
-        if low.endswith(('.jpg', '.jpeg')):
+        if low.endswith(('.jpg', '.jpeg', '.heic', '.heif')):
             t = jpeg_time(path)
             if t:
                 from zoneinfo import ZoneInfo
