@@ -241,6 +241,23 @@ const BEHAVIOUR = [
     jindo: 'Jindos are watchful and sensitive to change. Predictable routines and a safe spot of his own tend to settle them faster than lots of new experiences at once.',
     mistakes: ['Forcing him to “face” the scary thing.', 'Leaving him alone in a dark room far from you while he’s still settling in.', 'Getting frustrated — he picks up on tension.'],
     vet: 'See the vet if it hasn’t eased after 2–3 weeks, is getting worse, or comes with trembling, panting, hiding, not settling for long, or bumping into things in dim light — night-time jumpiness can sometimes be a vision or discomfort problem.',
+  },
+  {
+    id: 'plant', icon: '🛑', title: 'Stops or won’t walk', when: 'Sits down or jumps up to be carried after the potty break',
+    why: 'At 9 months and new to the neighbourhood, the world past the potty spot can feel big. Many puppies walk happily home but stall walking away from it — a sign of nerves. It also sticks if sitting or jumping gets him picked up. Less often it’s discomfort (collar pressure, sore pads, cold ground).',
+    steps: [
+      'Keep walks short and happy for now — 5 minutes of exploring near home beats 20 minutes of coaxing. A rough puppy guide is ~5 minutes of structured walking per month of age, up to twice a day.',
+      'When he sits, wait calmly beside him for 20–30 seconds and let him look. Watching is how he decides it’s safe.',
+      'Make forward fun: toss a treat a few steps ahead (“Find it!”), or walk away cheerfully crouched low. Reward the moment he moves with you.',
+      'Never drag him by the collar — it adds neck pressure and makes forward feel worse. Use a front-clip harness.',
+      'Carry him only if he’s truly frightened (shaking, tail tucked) or it’s unsafe. Otherwise wait it out.',
+      'Jumping up to be held: turn away calmly; the moment all four paws are on the ground, attention and a treat. Teach “sit” as his polite way to ask.',
+      'Try somewhere quieter for a week or two — a calm park or trail — then come back to the street.',
+      'Note where it happens (a corner, a sound, a time). A pattern means a specific thing to build up to slowly.',
+    ],
+    jindo: 'Jindos are cautious with new places and decide things on their own timeline. Patience and letting him observe usually wins over persuading.',
+    mistakes: ['Dragging or pulling him forward.', 'Picking him up every time he sits — it teaches that sitting gets carried.', 'Long walks before he’s comfortable — end while he’s still happy.'],
+    vet: 'Check with the vet if he stops even in quiet places or on the way home, seems stiff or limps, licks his paws a lot, or flinches when the harness or collar is touched.',
   }
 ];
 
@@ -273,14 +290,14 @@ const LEASH_PLAN = [
   { title: 'Treats at the hip', place: 'Home', do: 'Hold treats at your hip on his side. Walk 2–3 steps, “Yes!” + treat while he’s beside you. Add turns and stops.', goal: '5 steps beside you without pulling.' },
   { title: 'Tight leash = stop', place: 'Hallway or yard', do: 'Walk slowly. The moment the leash goes tight, freeze. When it slackens even a little, “Yes!”, treat, carry on.', goal: 'He starts easing back on his own when you stop.' },
   { title: 'Turn and go', place: 'Yard or driveway', do: 'If he pulls ahead, say “this way” cheerfully and walk the other direction. Treat when he catches up beside you.', goal: 'He keeps an eye on where you’re going.' },
-  { title: 'First quiet street', place: 'Quiet street', do: 'Short walk (10 min). Same rule: tight = stop, loose = walk. Treat often — every few steps at first.', goal: 'More loose leash than tight on the way back.' },
+  { title: 'First quiet street', place: 'Quiet street', do: 'Keep it short (5–10 min). If he sits, wait beside him and let him look, then toss a treat ahead — “Find it!”. Never drag. Same rule: tight = stop, loose = walk. Treat often — every few steps at first.', goal: 'More loose leash than tight on the way back.' },
   { title: 'Sniff as a reward', place: 'Quiet street', do: 'After 10–20 steps of loose leash, say “Go sniff!” and let him explore for 10 seconds. Then carry on.', goal: 'He waits for “Go sniff” instead of dragging you to smells.' },
   { title: 'Check-in game', place: 'Anywhere', do: 'Every time he looks up at you on his own, “Yes!” + treat. Don’t ask — catch it.', goal: '5+ check-ins on a 10-minute walk.' },
   { title: 'Rest day', place: 'Home', do: 'Easy sniff walk on a long line, no training. Brain game at home instead.', goal: 'A relaxed, happy dog.' },
   { title: 'Fewer treats', place: 'Quiet street', do: 'Treat every 5–10 steps instead of every few. Keep stopping when it’s tight.', goal: 'Same loose leash with half the treats.' },
   { title: 'Mild distractions', place: 'Street with some traffic', do: 'Pass a person or parked bike at a distance he can cope with. Treat for looking at it calmly, then for looking back at you.', goal: 'He passes without lunging.' },
   { title: 'Squirrels & dogs from afar', place: 'Park edge', do: 'Find a spot far from other dogs / wildlife. “Look at that” game: he looks → “Yes!” → treat. Move closer only if he stays calm.', goal: 'He can watch, then turn back to you.' },
-  { title: 'Longer walk', place: 'Usual route', do: '20 minutes, same rule throughout. Mix training stretches with “Go sniff” breaks.', goal: 'Mostly loose leash for the whole walk.' },
+  { title: 'Longer walk', place: 'Usual route', do: '15–20 minutes if he’s comfortable (at 9 months, ~5 min per month of age is plenty), same rule throughout. Mix training stretches with “Go sniff” breaks.', goal: 'Mostly loose leash for the whole walk.' },
   { title: 'Rest day', place: 'Home', do: 'Long line sniff walk somewhere quiet. Practise “Wait” at the door before you go out.', goal: 'Calm at the door.' },
   { title: 'Show-off walk', place: 'Busier place', do: 'Café strip, trailhead or park. Treat generously; leave if it’s too much. Film a clip for Oscar’s Diary!', goal: 'A loose-leash walk somewhere new. 🎉' },
 ];
