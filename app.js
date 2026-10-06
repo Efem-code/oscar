@@ -438,6 +438,7 @@ VIEWS.today = () => {
     ${P().homeDay && daysUntil(P().homeDay) > 0 && !Store.list('log').length ? '' : countdownCard()}
     ${whoLine()}
     ${walkCard()}
+    ${planTodayCard()}
     ${quickGrid()}
     ${askButton()}
     ${appCfg('cam').on ? `<button class="cam-btn" data-act="openCam">📹 Check on ${esc(App.pet())} <span class="muted small">${esc(camName())}</span></button>` : ''}
@@ -641,6 +642,7 @@ VIEWS.train = () => {
       <details><summary>Training basics that make everything easier</summary><ul>${TRAINING_BASICS.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>
     </section>
     </div><div>
+    ${planCard()}
     <section class="card"><div class="h-row"><h3>🧩 Brain games</h3><span class="muted small">${weekGames} this week</span></div>
       <p class="muted small">10 minutes of sniffing and problem-solving can tire him like a long walk. Tip: serve one of his two meals this way.</p>
       <div class="games">${GAMES.map(g => { const n = doneGames(g.id).length; return `<button class="game" data-act="game" data-id="${g.id}"><span>${g.icon}</span><b>${esc(g.title)}</b><small>${esc(g.time)}${n ? ' · ✓' + n : ''}</small></button>`; }).join('')}</div>
@@ -1662,6 +1664,76 @@ ACT.quickSettings = () => {
       await Store.put({ id: 'profile', kind: 'profile', quickHide: hide });
       closeSheet();
     };
+  });
+};
+
+/* ---------- 2-week walking plan ---------- */
+/* Start date lives on one record; each finished day is its own record, so
+   both phones can tick days without overwriting each other. */
+const planDays = () => Store.list('planday', r => r.plan === 'leash');
+function planState() {
+  const p = Store.get('plan-leash');
+  if (!p || p.stopped) return null;
+  const done = new Set(planDays().map(r => r.day));
+  const next = LEASH_PLAN.findIndex((_, i) => !done.has(i + 1)) + 1;          // 0 = all done
+  const doneToday = planDays().some(r => localDay(r.at) === todayKey());
+  return { start: p.start, done, next, doneToday, finished: next === 0 };
+}
+
+function planTodayCard() {
+  const st = planState();
+  if (!st || st.finished) return '';
+  const d = LEASH_PLAN[st.next - 1];
+  return `<button class="card chipcard plan-today" data-act="planDay" data-n="${st.next}">
+    <span class="cd-label">🦮 Walking plan · day ${st.next} of ${LEASH_PLAN.length}${st.doneToday ? ' · today’s done ✓' : ''}</span>
+    <b>${esc(d.title)}</b><small class="muted">${esc(d.place)} · ${esc(d.goal)}</small></button>`;
+}
+
+function planCard() {
+  const st = planState();
+  if (!st) return `<section class="card"><h3>🦮 2-week walking plan</h3>
+    <p class="muted">One focus a day — 5–10 minutes plus your normal walks — to go from pulling on the collar to a loose leash. Starts with the right harness.</p>
+    <button class="primary" data-act="planStart">Start the plan</button></section>`;
+  const n = st.done.size, pct = Math.round(100 * n / LEASH_PLAN.length);
+  return `<section class="card"><div class="h-row"><h3>🦮 2-week walking plan</h3><span class="muted small">${n}/${LEASH_PLAN.length}</span></div>
+    <div class="goal-bar"><i style="width:${pct}%"></i></div>
+    ${st.finished ? '<p>🎉 Plan finished! Keep the rule going on every walk — and film a show-off walk for Oscar’s Diary.</p>' : ''}
+    <div class="plan-days">${LEASH_PLAN.map((d, i) => `<button class="pday ${st.done.has(i + 1) ? 'done' : ''} ${st.next === i + 1 ? 'next' : ''}" data-act="planDay" data-n="${i + 1}">
+      <b>${st.done.has(i + 1) ? '✓' : i + 1}</b><small>${esc(d.title)}</small></button>`).join('')}</div>
+    <button class="link" data-act="planStop">${st.finished ? 'Start again' : 'Restart or stop the plan'}</button></section>`;
+}
+
+ACT.planStart = async () => {
+  await Store.put({ id: 'plan-leash', kind: 'plan', start: todayKey(), stopped: false });
+  for (const r of planDays()) await Store.remove(r.id);
+  ACT.planDay({ n: 1 });
+};
+ACT.planStop = () => {
+  if (!confirm('Clear the ticks and start the walking plan over? (Practice sessions already logged stay.)')) return;
+  ACT.planStart();
+};
+ACT.planDay = d => {
+  const n = Number(d.n), day = LEASH_PLAN[n - 1], rec = planDays().find(r => r.day === n);
+  sheet(`<h2>🦮 Day ${n}: ${esc(day.title)}</h2>
+    <p class="muted">${esc(day.place)}</p>
+    <h4>Today</h4><p>${esc(day.do)}</p>
+    <h4>You’re aiming for</h4><p>${esc(day.goal)}</p>
+    ${n === 1 ? '<div class="banner jindo">🐕 A collar puts all the pull on his throat. Use a snug, escape-proof front-clip harness for walks — Jindos are known for backing out of loose gear.</div>' : ''}
+    ${rec ? `<p class="muted small">✓ Done ${fmtDay(localDay(rec.at))}${rec.by ? ' by ' + esc(rec.by) : ''}${rec.rating ? ' · ' + '★'.repeat(rec.rating) : ''}</p>` : `
+    <h4>How did it go?</h4>
+    <div class="chips" id="pd-rate">${[1, 2, 3, 4, 5].map(k => `<button class="chip" data-r="${k}">${k}${k === 1 ? ' · rough' : k === 5 ? ' · great' : ''}</button>`).join('')}</div>
+    <div class="fld" style="margin-top:10px"><input id="pd-note" placeholder="Note (optional): distractions, what helped"></div>
+    <div class="btns"><span class="grow"></span><button class="primary" id="pd-done" disabled>Done — tick day ${n}</button></div>`}
+    <details><summary>Full guide: loose-leash walking</summary><ol class="steps">${GUIDES.find(g => g.id === 'leash').steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol></details>`, r => {
+    let rating = 0;
+    r.querySelectorAll('#pd-rate .chip').forEach(b => b.onclick = () => { rating = Number(b.dataset.r); r.querySelectorAll('#pd-rate .chip').forEach(c => c.classList.toggle('on', c === b)); $('#pd-done', r).disabled = false; });
+    $('#pd-done', r) && ($('#pd-done', r).onclick = async () => {
+      const note = $('#pd-note', r).value.trim();
+      await Store.put({ id: `plan-leash-d${n}`, kind: 'planday', plan: 'leash', day: n, rating, note });
+      await Store.put({ kind: 'train', skill: 'Loose leash', rating, note: `Walking plan day ${n}${note ? ' — ' + note : ''}` });
+      closeSheet();
+      toast(n === LEASH_PLAN.length ? '🎉 Walking plan complete!' : `✓ Day ${n} done — day ${n + 1} tomorrow`);
+    });
   });
 };
 

@@ -265,3 +265,22 @@ const BRAND = {
   ],
   look: 'Terracotta + cream, Futura bold titles, warm colour, soft crossfades, “DAY n” badge, the paw end card. Same every time — that’s what makes it a brand.',
 };
+
+/* Two-week loose-leash plan. One focus a day, 5–10 minutes of practice plus
+   the walks you'd do anyway. Ticking a day logs a 'Loose leash' session. */
+const LEASH_PLAN = [
+  { title: 'Gear + the rule', place: 'Home', do: 'Fit a front-clip harness (snug: two fingers under the straps). Clip the leash to the chest ring. Indoors: one step, if he’s beside you → “Yes!” + treat. 20 reps.', goal: 'He follows you around the room for treats.' },
+  { title: 'Treats at the hip', place: 'Home', do: 'Hold treats at your hip on his side. Walk 2–3 steps, “Yes!” + treat while he’s beside you. Add turns and stops.', goal: '5 steps beside you without pulling.' },
+  { title: 'Tight leash = stop', place: 'Hallway or yard', do: 'Walk slowly. The moment the leash goes tight, freeze. When it slackens even a little, “Yes!”, treat, carry on.', goal: 'He starts easing back on his own when you stop.' },
+  { title: 'Turn and go', place: 'Yard or driveway', do: 'If he pulls ahead, say “this way” cheerfully and walk the other direction. Treat when he catches up beside you.', goal: 'He keeps an eye on where you’re going.' },
+  { title: 'First quiet street', place: 'Quiet street', do: 'Short walk (10 min). Same rule: tight = stop, loose = walk. Treat often — every few steps at first.', goal: 'More loose leash than tight on the way back.' },
+  { title: 'Sniff as a reward', place: 'Quiet street', do: 'After 10–20 steps of loose leash, say “Go sniff!” and let him explore for 10 seconds. Then carry on.', goal: 'He waits for “Go sniff” instead of dragging you to smells.' },
+  { title: 'Check-in game', place: 'Anywhere', do: 'Every time he looks up at you on his own, “Yes!” + treat. Don’t ask — catch it.', goal: '5+ check-ins on a 10-minute walk.' },
+  { title: 'Rest day', place: 'Home', do: 'Easy sniff walk on a long line, no training. Brain game at home instead.', goal: 'A relaxed, happy dog.' },
+  { title: 'Fewer treats', place: 'Quiet street', do: 'Treat every 5–10 steps instead of every few. Keep stopping when it’s tight.', goal: 'Same loose leash with half the treats.' },
+  { title: 'Mild distractions', place: 'Street with some traffic', do: 'Pass a person or parked bike at a distance he can cope with. Treat for looking at it calmly, then for looking back at you.', goal: 'He passes without lunging.' },
+  { title: 'Squirrels & dogs from afar', place: 'Park edge', do: 'Find a spot far from other dogs / wildlife. “Look at that” game: he looks → “Yes!” → treat. Move closer only if he stays calm.', goal: 'He can watch, then turn back to you.' },
+  { title: 'Longer walk', place: 'Usual route', do: '20 minutes, same rule throughout. Mix training stretches with “Go sniff” breaks.', goal: 'Mostly loose leash for the whole walk.' },
+  { title: 'Rest day', place: 'Home', do: 'Long line sniff walk somewhere quiet. Practise “Wait” at the door before you go out.', goal: 'Calm at the door.' },
+  { title: 'Show-off walk', place: 'Busier place', do: 'Café strip, trailhead or park. Treat generously; leave if it’s too much. Film a clip for Oscar’s Diary!', goal: 'A loose-leash walk somewhere new. 🎉' },
+];

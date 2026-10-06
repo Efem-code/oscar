@@ -396,3 +396,12 @@ ol.steps li { margin-bottom: 6px; }
 .ask-bl dd { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
 
 .banner.vet { background: color-mix(in srgb, var(--bad) 12%, var(--card)); cursor: default; }
+
+.plan-today { display: flex; flex-direction: column; gap: 2px; border-color: var(--good); }
+.plan-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 10px 0; }
+.pday { background: var(--soft); border-radius: 10px; padding: 6px 2px; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.pday b { font-size: 15px; }
+.pday small { font-size: 9.5px; color: var(--muted); text-align: center; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.pday.done { background: color-mix(in srgb, var(--good) 25%, var(--card)); }
+.pday.done b { color: var(--good); }
+.pday.next { outline: 2px solid var(--accent); }
