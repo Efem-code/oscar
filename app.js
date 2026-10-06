@@ -803,10 +803,11 @@ VIEWS.memories = () => {
    videos, saved to Drive → Reels, and listed here as `reel` records. Posting
    stays one tap and yours: Share → Instagram, with the caption copied. */
 function reelsStrip() {
-  const reels = Store.list('reel');
+  const reels = Store.list('reel').sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0) || (a.option || '').localeCompare(b.option || ''));
   if (!reels.length) return '';
   return `<section class="card"><div class="h-row"><h3>🎬 Reels</h3><span class="muted small">made each evening from the day</span></div>
-    <div class="strip">${reels.slice(0, 12).map(r => `<button data-act="reel" data-id="${r.id}"><div class="th reel ${r.posted ? 'posted' : ''}" ${r.thumbId ? `data-thumb="${r.id}"` : ''}>${r.posted ? '<i>✓ posted</i>' : '<i>▶</i>'}</div><small>${fmtDay(localDay(r.at))}</small></button>`).join('')}</div></section>`;
+    <div class="strip">${reels.slice(0, 12).map(r => `<button data-act="reel" data-id="${r.id}"><div class="th reel ${r.posted ? 'posted' : ''}" ${r.thumbId ? `data-thumb="${r.id}"` : ''}>${r.posted ? '<i>✓ posted</i>' : '<i>▶</i>'}</div><small>${r.option ? `<b>Option ${esc(r.option)}</b> · ${esc(r.style || '')}` : fmtDay(localDay(r.at))}</small></button>`).join('')}</div>
+    ${reels.some(r => r.group && reels.filter(x => x.group === r.group).length > 1) ? '<p class="small muted">Watch the options, then tap “Use this one” on your favourite — the others are removed.</p>' : ''}</section>`;
 }
 EARLY_ACT.photoOrder = () => { Store.setPref('oscar.photoOrder', Store.pref('oscar.photoOrder') === 'oldest' ? 'newest' : 'oldest'); render(); };
 EARLY_ACT.reel = async d => {
@@ -817,11 +818,22 @@ EARLY_ACT.reel = async d => {
     <div class="reel-stage" id="reel-stage"><div class="spin">Loading…</div></div>
     <h4>Caption</h4><p class="pre">${esc(caption)}</p>
     <p class="small muted">Tip: add a trending sound in Instagram before posting — it’s one of the biggest boosts for reach.</p>
+    ${r.group && Store.list('reel', x => x.group === r.group).length > 1 ? `<button class="primary block-btn" id="reel-pick">✓ Use this one (remove the other ${Store.list('reel', x => x.group === r.group).length - 1})</button>` : ''}
     <div class="btns">${r.posted ? '<span class="muted small">✓ marked as posted</span>' : '<button class="ghost" id="reel-done">Mark posted</button>'}<span class="grow"></span>
       ${r.driveId ? `<a class="ghost" href="${Drive.webLink(r.driveId)}" target="_blank" rel="noopener">Drive</a>` : ''}
       <button class="primary" id="reel-share" disabled>Post to Instagram</button></div>`, async root => {
     let blob = null;
     $('#reel-done', root) && ($('#reel-done', root).onclick = async () => { await Store.put({ id: r.id, posted: true }); closeSheet(); });
+    $('#reel-pick', root) && ($('#reel-pick', root).onclick = async () => {
+      if (!confirm('Keep this option and move the others to Drive’s trash?')) return;
+      for (const x of Store.list('reel', x => x.group === r.group && x.id !== r.id)) {
+        for (const id of [x.driveId, x.thumbId]) if (id) Drive.trash(id);
+        await Store.remove(x.id);
+      }
+      await Store.put({ id: r.id, chosen: true });
+      toast(`Option ${r.option} it is — ready to post`);
+      ACT.reel({ id: r.id });
+    });
     try {
       blob = await Drive.download(r.driveId, f => { const sp = $('#reel-stage .spin', root); if (sp) sp.textContent = `Loading… ${Math.round(f * 100)}%`; }, 'video/mp4');
       $('#reel-stage', root).innerHTML = `<video src="${URL.createObjectURL(blob)}" controls playsinline loop muted autoplay></video>`;

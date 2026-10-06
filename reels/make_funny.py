@@ -65,53 +65,84 @@ def joke(rec, recs, used):
 
 def window(recs, today):
     """Days since the last funny reel (at most 4, at least 2)."""
-    last = max((r['at'][:10] for r in recs.values() if r.get('kind') == 'reel' and r.get('funny') and not r.get('deleted')), default=None)
+    # Reels made today don't count — re-running on the same day rebuilds them.
+    last = max((r['at'][:10] for r in recs.values() if r.get('kind') == 'reel' and r.get('funny') and not r.get('deleted')
+                and r['at'][:10] < today.isoformat()), default=None)
     start = (datetime.fromisoformat(last) + timedelta(days=1)).date() if last else today - timedelta(days=3)
     start = max(start, today - timedelta(days=3))
     return [(start + timedelta(days=i)).isoformat() for i in range((today - start).days + 1)]
 
 
-def plan(days, recs):
-    local = {}
+def candidates(days, recs):
+    """Fetch and analyse the window's media once; every option is built from this."""
     media = [r for r in recs.values() if r.get('kind') == 'media' and not r.get('deleted') and not r.get('doc')
              and not r.get('noReel') and r.get('driveId') and local_day(r['at']) in days]
+    vids, pics, naps = [], [], []
     for r in media:
         try:
-            local[r['driveId']] = bridge.download(r['driveId'], os.path.splitext(r.get('name') or '')[1].lower())
+            p = bridge.download(r['driveId'], os.path.splitext(r.get('name') or '')[1].lower())
         except Exception as e:
-            log('could not fetch', r.get('name'), e)
-    vids = [r for r in media if r.get('video') and r['driveId'] in local]
-    pics = [r for r in media if not r.get('video') and r['driveId'] in local]
-    if len(vids) < 2:
-        return None, f'only {len(vids)} videos since the last funny reel — comedy needs movement'
-    items = []
-    for r in vids:
-        p = local[r['driveId']]; info = probe(p)
-        if info['dur'] < 1.2:
-            continue
-        L = min(CLIP, info['dur'] - 0.2)
-        start, score = best_window(motion(p, info['dur']), info['dur'], L)
-        items.append({'rec': r, 'path': p, 'video': True, 'start': start, 'len': L, 'score': score + (8 if r.get('star') else 0), 'audio': info['audio']})
-    naps = []
-    for r in pics:
-        lab = joke(r, recs, set())
-        it = {'rec': r, 'path': local[r['driveId']], 'video': False, 'len': PHOTO, 'score': 6 if r.get('star') else 0}
-        (naps if lab in JOKES['sleep'] else items).append(it)
-    vids_sorted = sorted([x for x in items if x['video']], key=lambda x: -x['score'])
-    pics_sorted = sorted([x for x in items if not x['video']], key=lambda x: -x['score'])
-    # Chaos first: liveliest clips, a few photos for breathers, then the nap punchline.
-    chosen, total = [], 0.0
-    for x in vids_sorted[:6] + pics_sorted[:3]:
-        if total >= TARGET - 2:
-            break
-        chosen.append(x); total += x['len']
-    hook, middle = chosen[0], chosen[1:]
-    random.seed(days[-1]); random.shuffle(middle)
-    # Punchline: a real nap shot gets "battery: 0%"; otherwise a closing beat.
-    ending = naps[:1] or [x for x in pics_sorted if x not in chosen][:1]
-    for x in ending:
-        x['len'] = 1.8; x['label'] = 'battery: 0%' if naps else 'and scene.'
-    return [hook] + middle + ending, None
+            log('could not fetch', r.get('name'), e); continue
+        if r.get('video'):
+            info = probe(p)
+            if info['dur'] < 1.2:
+                continue
+            vals = motion(p, info['dur'])
+            vids.append({'rec': r, 'path': p, 'info': info, 'vals': vals, 'energy': (sum(vals) / len(vals) if vals else 0) + (8 if r.get('star') else 0)})
+        else:
+            x = {'rec': r, 'path': p, 'score': 6 if r.get('star') else 0}
+            (naps if joke(r, recs, set()) in JOKES['sleep'] else pics).append(x)
+    vids.sort(key=lambda v: -v['energy']); pics.sort(key=lambda x: -x['score'])
+    return vids, pics, naps
+
+
+def clip(v, length):
+    L = min(length, v['info']['dur'] - 0.2)
+    start, score = best_window(v['vals'], v['info']['dur'], L)
+    return {'rec': v['rec'], 'path': v['path'], 'video': True, 'start': start, 'len': L, 'score': score, 'audio': v['info']['audio']}
+
+
+def photo(x, length, label=None):
+    return {'rec': x['rec'], 'path': x['path'], 'video': False, 'len': length, 'score': x['score'], 'label': label}
+
+
+def option_meme(vids, pics, naps, recs, k):
+    top, bottom, opener = HOOKS[k % len(HOOKS)]
+    items = [clip(v, CLIP) for v in vids[:6]] + [photo(x, PHOTO) for x in pics[:3]]
+    hook, middle = items[0], items[1:]
+    random.seed(k); random.shuffle(middle)
+    end = [photo(x, 1.8, 'battery: 0%') for x in naps[:1]] or [photo(x, 1.8, 'and scene.') for x in pics[3:4]]
+    used = set()
+    for x in middle:
+        x['label'] = joke(x['rec'], recs, used)
+        if x['label']: used.add(x['label'])
+    return {'key': 'A', 'style': 'Meme', 'badge': (top, bottom), 'items': [hook] + middle + end, 'opener': opener, 'punch': True}
+
+
+def option_countdown(vids, pics, naps, recs, k):
+    top5 = vids[:5]
+    if len(top5) < 3:
+        return None
+    n = len(top5)
+    items = [clip(v, 2.0) for v in reversed(top5)]                 # least wild first, #1 last
+    for i, x in enumerate(items):
+        x['label'] = f'#{n - i}'
+    return {'key': 'B', 'style': 'Countdown', 'badge': (f"OSCAR'S TOP {n}", 'CHAOS MOMENTS'), 'items': items,
+            'opener': f'Ranking this week’s top {n} chaos moments. #1 had no business being that dramatic 😂', 'punch': True}
+
+
+def option_story(vids, pics, naps, recs, k, breed):
+    pool = [clip(v, 2.4) for v in vids[:4]] + [photo(x, 1.6) for x in pics[:4]]
+    pool.sort(key=lambda x: x['rec']['at'])                          # tell it in the order it happened
+    for x in pool:
+        x['label'] = R.clip_label(x['rec'], recs)
+    prev = None
+    for x in pool:
+        if x['label'] == prev: x['label'] = None
+        else: prev = x['label']
+    end = [photo(x, 2.0, 'worth it') for x in naps[:1]]
+    return {'key': 'C', 'style': 'Story', 'badge': ('POV: YOU ADOPTED', f'A {breed.upper()}'), 'items': pool + end,
+            'opener': f'Nobody warned us how much personality fits in one {breed} 🐾', 'punch': False}
 
 
 def punch_in(x, out):
@@ -132,66 +163,61 @@ def main():
             log('preview backfill skipped:', e)
     recs, _ = bridge.records()
     days = window(recs, today)
-    log('funny reel from', days[0], 'to', days[-1])
-    items, why = plan(days, recs)
-    if not items:
-        log('skipping:', why); return
-    used = set()
-    for x in items[1:]:
-        if not x.get('label'):
-            x['label'] = joke(x['rec'], recs, used)
-            if x['label']: used.add(x['label'])
-    n_funny = sum(1 for r in recs.values() if r.get('kind') == 'reel' and r.get('funny') and not r.get('deleted'))
-    top, bottom, opener = HOOKS[n_funny % len(HOOKS)]
-    log('hook:', top, '/', bottom, '|', len(items), 'clips:', ', '.join(f"{'V' if x['video'] else 'P'}{x['len']:.1f}" + (f"[{x['label']}]" if x.get('label') else '') for x in items))
+    log('funny reel options from', days[0], 'to', days[-1])
+    vids, pics, naps = candidates(days, recs)
+    if len(vids) < 2:
+        log(f'skipping: only {len(vids)} videos since the last funny reel — comedy needs movement'); return
     f = R.day_facts(days[-1], recs)
+    k = len({r.get('group') or r['id'] for r in recs.values() if r.get('kind') == 'reel' and r.get('funny') and not r.get('deleted') and r['at'][:10] < days[-1]})
+    options = [o for o in (option_meme(vids, pics, naps, recs, k), option_countdown(vids, pics, naps, recs, k),
+                           option_story(vids, pics, naps, recs, k, f['breed'])) if o]
     random.seed('cta' + days[-1])
-    cap = '\n'.join([
-        opener,
-        random.choice(['Rate the chaos 1–10 👇', 'Send this to someone with a dramatic dog 🐾', 'Which clip got you? 👇', 'Tag someone who needs a Jindo in their life 🐶']),
-        f"More of {f['name']} every week — follow {R.HANDLE} 🐾",
-    ])
     tags = '#jindo #koreanjindo #funnydogs #dogsofinstagram #jindosofinstagram #puppylife #dogmemes #jindopuppy'
-    if dry:
-        print(cap + '\n\n' + tags); return
-
-    # Render: reuse the Diary renderer, with punch-ins on alternate clips.
-    orig = R.render_segment
-    flip = {'n': 0}
-    def seg(x, out):
-        flip['n'] += 1
-        (punch_in if x['video'] and flip['n'] % 2 == 0 else orig)(x, out)
-    R.render_segment = seg
-    try:
-        out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out', f'funny {days[-1]}.mp4') if preview else os.path.join(tempfile.gettempdir(), f'oscar-funny-{days[-1]}.mp4')
-        os.makedirs(os.path.dirname(out), exist_ok=True)
-        total = R.render(items, [top, bottom], out, badge=(top, bottom), tag=f"{f['name'].upper()}'S DIARY", name=f['name'],
-                         signoff='new episodes every week', sub=120)
-    finally:
-        R.render_segment = orig
-    if preview:
-        log(f'preview: {total:.1f} s → {out}'); print(cap + '\n\n' + tags); return
-
-    rid = f'reel-funny-{days[-1]}'
-    old = recs.get(rid, {})
-    thumb = out + '.jpg'
-    run([FFMPEG, '-y', '-v', 'error', '-ss', '1.0', '-i', out, '-frames:v', '1', '-vf', 'scale=360:-2', thumb])
-    vid = bridge.upload(out, f'{days[-1]} {f["name"]} funny reel.mp4', 'video/mp4', 'reel')
-    tid = bridge.upload(thumb, f'reel-thumb-funny-{days[-1]}.jpg', 'image/jpeg', 'thumb')
-    for g in (old.get('driveId'), old.get('thumbId')):
-        if g and g not in (vid, tid):
-            try: bridge.call('trash', id=g)
-            except Exception: pass
-    rec = dict(old, id=rid, kind='reel', funny=True, at=f'{days[-1]}T19:00:00.000Z', title=f'{top} {bottom}',
-               caption=cap, tags=tags, duration=round(total, 1), clips=len(items), driveId=vid, thumbId=tid, posted=old.get('posted', False))
-    rec.setdefault('created', bridge.now_iso()); rec.setdefault('shard', days[-1][:7]); rec.setdefault('author', 'Claude')
-    bridge.save([rec])
-    if not old.get('driveId') and '--no-notify' not in sys.argv:
+    group = f'funny-{days[-1]}'
+    made = []
+    for o in options:
+        cap = '\n'.join([o['opener'], random.choice(['Rate the chaos 1–10 👇', 'Send this to someone with a dramatic dog 🐾', 'Which clip got you? 👇', 'Tag someone who needs a Jindo in their life 🐶']),
+                         f"More of {f['name']} every week — follow {R.HANDLE} 🐾"])
+        log(f"option {o['key']} ({o['style']}): {' / '.join(o['badge'])} | " + ', '.join(f"{'V' if x['video'] else 'P'}{x['len']:.1f}" + (f"[{x['label']}]" if x.get('label') else '') for x in o['items']))
+        if dry:
+            continue
+        orig, flip = R.render_segment, {'n': 0}
+        def seg(x, out, o=o):
+            flip['n'] += 1
+            (punch_in if o['punch'] and x['video'] and flip['n'] % 2 == 0 else orig)(x, out)
+        R.render_segment = seg
         try:
-            bridge.call('notify', title=f"😂 This week’s funny {f['name']} reel is ready", body=f"{round(total)} s · {top.title()} {bottom.lower()}", tag='reel', url='./#memories')
+            out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out', f"funny {days[-1]} {o['key']}.mp4") if preview else os.path.join(tempfile.gettempdir(), f"oscar-funny-{days[-1]}-{o['key']}.mp4")
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            total = R.render(o['items'], list(o['badge']), out, badge=o['badge'], tag=f"{f['name'].upper()}'S DIARY", name=f['name'],
+                             signoff='new episodes every week', sub=120 if o['key'] != 'C' else 96)
+        finally:
+            R.render_segment = orig
+        log(f"  rendered {total:.1f} s")
+        if preview:
+            made.append(out); continue
+        rid = f"reel-{group}-{o['key'].lower()}"
+        old = recs.get(rid, {})
+        thumb = out + '.jpg'
+        run([FFMPEG, '-y', '-v', 'error', '-ss', '1.0', '-i', out, '-frames:v', '1', '-vf', 'scale=360:-2', thumb])
+        vid = bridge.upload(out, f"{days[-1]} {f['name']} reel option {o['key']}.mp4", 'video/mp4', 'reel')
+        tid = bridge.upload(thumb, f"reel-thumb-{group}-{o['key']}.jpg", 'image/jpeg', 'thumb')
+        for g in (old.get('driveId'), old.get('thumbId')):
+            if g and g not in (vid, tid):
+                try: bridge.call('trash', id=g)
+                except Exception: pass
+        rec = dict(old, id=rid, kind='reel', funny=True, group=group, option=o['key'], style=o['style'], at=f'{days[-1]}T19:00:00.000Z',
+                   title=f"Option {o['key']} · {o['style']} — {' '.join(o['badge'])}", caption=cap, tags=tags, duration=round(total, 1),
+                   clips=len(o['items']), driveId=vid, thumbId=tid, posted=old.get('posted', False))
+        rec.setdefault('created', bridge.now_iso()); rec.setdefault('shard', days[-1][:7]); rec.setdefault('author', 'Claude')
+        bridge.save([rec])
+        made.append(rid)
+    if made and not dry and not preview and '--no-notify' not in sys.argv:
+        try:
+            bridge.call('notify', title=f"😂 {len(made)} options for this week’s {f['name']} reel", body='Pick your favourite in Photos → Reels', tag='reel', url='./#memories')
         except Exception as e:
             log('notification not sent:', e)
-    log('done')
+    log('done', made)
 
 
 if __name__ == '__main__':

@@ -405,3 +405,6 @@ ol.steps li { margin-bottom: 6px; }
 .pday.done { background: color-mix(in srgb, var(--good) 25%, var(--card)); }
 .pday.done b { color: var(--good); }
 .pday.next { outline: 2px solid var(--accent); }
+
+.block-btn { display: block; width: 100%; margin: 10px 0; }
+.strip small b { color: var(--accent); }
