@@ -422,3 +422,26 @@ ol.steps li { margin-bottom: 6px; }
 .strip.picks > div { flex: 0 0 64px; text-align: center; }
 .strip.picks .th { width: 64px; border-radius: 6px; }
 .th.reel.pending, .th.reel.failed { background: var(--soft); }
+
+/* My plan + training sessions (coach.js) */
+.coach-row { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); }
+.coach-row.done .item-main b { color: var(--muted); }
+.block-btn { display: block; width: 100%; margin: 4px 0 6px; }
+.track { padding: 10px 0; border-top: 1px solid var(--line); }
+.track.locked { opacity: .55; }
+.track .plan-days { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+.session h2 { margin-bottom: 6px; }
+.session details { margin-bottom: 8px; }
+.ses-time { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; margin: 8px 0 14px; }
+.ses-time b { font-size: 30px; font-variant-numeric: tabular-nums; }
+.clicker { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: min(220px, 62vw); aspect-ratio: 1; margin: 0 auto 14px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 0 color-mix(in srgb, var(--accent) 60%, #000); touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.clicker span { font-size: 30px; font-weight: 800; }
+.clicker small { font-size: 12px; opacity: .85; }
+.clicker:active { transform: translateY(4px); box-shadow: 0 2px 0 color-mix(in srgb, var(--accent) 60%, #000); }
+.clicker.pop { animation: clickpop .25s; }
+@keyframes clickpop { 50% { filter: brightness(1.15); } }
+.ses-count { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.ses-count b { font-size: 22px; }
+.ses-snd { display: flex; align-items: center; gap: 6px; }
+.coach .h-row .link { white-space: nowrap; }

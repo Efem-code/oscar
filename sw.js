@@ -6,7 +6,7 @@ const BUILD = '20261006-092846';
 const PREFIX = 'oscar-';
 const CACHE = PREFIX + BUILD;
 const SHELL = [
-  './', './index.html', './styles.css', './data.js', './guides.js', './store.js', './drive.js', './media.js', './push.js', './app.js', './ask.js',
+  './', './index.html', './styles.css', './data.js', './guides.js', './store.js', './drive.js', './media.js', './push.js', './app.js', './ask.js', './coach.js',
   './manifest.webmanifest', './icon-192.png', './icon-512.png'
 ];
 

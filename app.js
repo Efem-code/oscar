@@ -439,6 +439,7 @@ VIEWS.today = () => {
     ${whoLine()}
     ${walkCard()}
     ${planTodayCard()}
+    ${coachTodayCard()}
     ${quickGrid()}
     ${askButton()}
     ${appCfg('cam').on ? `<button class="cam-btn" data-act="openCam">📹 Check on ${esc(App.pet())} <span class="muted small">${esc(camName())}</span></button>` : ''}
@@ -629,8 +630,8 @@ VIEWS.train = () => {
   const weekGames = Store.list('enrich', r => T(r.at) > Date.now() - 7 * 864e5).length;
   return `${header('Training & brain games')}
     <div class="cols"><div>
-    <section class="card"><h3>✨ Today’s ideas</h3>
-      <button class="item-main block" data-act="guide" data-id="${pick.guide.id}"><span class="ico">${pick.guide.icon}</span><span><b>Practise: ${esc(pick.guide.title)}</b><small>${esc(pick.guide.when)}</small></span></button>
+    ${coachCard()}
+    <section class="card"><h3>✨ Today’s brain game</h3>
       <button class="item-main block" data-act="game" data-id="${pick.game.id}"><span class="ico">${pick.game.icon}</span><span><b>Play: ${esc(pick.game.title)}</b><small>${esc(pick.game.time)} · ${esc(pick.game.need)}</small></span></button>
     </section>
     ${pottyPlanCard()}
@@ -1167,7 +1168,8 @@ ACT.me = () => form({ title: '🙋 You', value: { name: Store.pref('oscar.name')
 ACT.train = d => {
   const hist = Store.list('train', r => r.skill === d.skill).slice(0, 5);
   form({ title: `🎓 ${d.skill}`, saveLabel: 'Log session',
-    intro: hist.length ? `<div class="hist">${hist.map(h => `<span>${fmtDay(localDay(h.at))} ${'★'.repeat(h.rating || 0)}${'☆'.repeat(5 - (h.rating || 0))}</span>`).join('')}</div>` : '<p class="muted">Short sessions, lots of treats. Rate how it went.</p>',
+    intro: (hist.length ? `<div class="hist">${hist.map(h => `<span>${fmtDay(localDay(h.at))} ${'★'.repeat(h.rating || 0)}${'☆'.repeat(5 - (h.rating || 0))}</span>`).join('')}</div>` : '<p class="muted">Short sessions, lots of treats. Rate how it went.</p>') +
+      `<button class="ghost block-btn" data-act="session" data-skill="${esc(d.skill)}">▶ Run a timed session with the clicker</button>`,
     fields: [{ k: 'rating', label: 'How did it go?', type: 'chips', options: [['1', '1 · not yet'], ['2', '2'], ['3', '3 · sometimes'], ['4', '4'], ['5', '5 · nailed it']], required: true },
       { k: 'note', label: 'Note', ph: 'what helped, distractions' }],
     onSave: v => Store.put({ kind: 'train', skill: d.skill, rating: Number(v.rating), note: v.note }) });
