@@ -301,3 +301,20 @@ const LEASH_PLAN = [
   { title: 'Rest day', place: 'Home', do: 'Long line sniff walk somewhere quiet. Practise “Wait” at the door before you go out.', goal: 'Calm at the door.' },
   { title: 'Show-off walk', place: 'Busier place', do: 'Café strip, trailhead or park. Treat generously; leave if it’s too much. Film a clip for Oscar’s Diary!', goal: 'A loose-leash walk somewhere new. 🎉' },
 ];
+
+/* Demo videos: each guide, plan track and some games open YouTube searched to
+   that exact skill from Kikopup (Emily Larlham), whose reward-based style
+   matches these guides. A search rather than a fixed video, so a link never
+   breaks when a video is renamed or removed. Keys are guide, track or game ids. */
+const VIDEOS = {
+  recall: 'kikopup recall come puppy', leash: 'kikopup loose leash walking', leave: 'kikopup leave it',
+  settle: 'kikopup settle on a mat relax', strangers: 'kikopup shy dog meeting strangers', door: 'kikopup wait at the door',
+  handling: 'kikopup nail trim handling', drop: 'kikopup drop it', focus: 'kikopup attention game name',
+  sit: 'kikopup teach sit', down: 'kikopup teach down', stay: 'kikopup teach stay',
+  bark: 'kikopup stop barking', bite: 'kikopup puppy biting', plant: 'kikopup dog won’t walk on leash',
+  trick: 'kikopup easy dog tricks', findit: 'kikopup find it nose game', flirt: 'kikopup flirt pole',
+};
+function videoButton(key, label = 'Watch it demonstrated') {
+  const q = VIDEOS[key]; if (!q) return '';
+  return `<a class="video-btn" href="https://www.youtube.com/results?search_query=${encodeURIComponent(q)}" target="_blank" rel="noopener">▶️ ${label}<small>trainer videos on YouTube</small></a>`;
+}

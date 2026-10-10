@@ -164,6 +164,7 @@ ACT.coachStep = d => {
   sheet(`<h2>${tr.icon} ${esc(tr.title)}: ${esc(s.t)}</h2>
     <p class="muted">Step ${i} of ${tr.steps.length} · about ${s.mins} minutes</p>
     <h4>What to do</h4><p>${esc(s.do)}</p>
+    ${videoButton(tr.id)}
     <h4>You’re aiming for</h4><p>${esc(s.goal)}</p>
     ${last && Number(last.rating) <= 2 ? `<div class="banner">Last time was tough. Make it easier today: closer, quieter, shorter, better treats${i > 1 ? `, or do a few reps of the step before (“${esc(tr.steps[i - 2].t)}”) first` : ''}. End on a win.</div>` : ''}
     ${hist.length ? `<h4>Sessions on this step</h4><div class="hist">${hist.map(h => `<span>${fmtDay(localDay(h.at))} ${h.known ? 'already knew it' : '★'.repeat(h.rating || 0) + '☆'.repeat(5 - (h.rating || 0))}</span>`).join('')}</div>` : ''}
@@ -230,7 +231,7 @@ ACT.session = d => {
 
   sheet(`<div class="session" id="ses">
     <h2>${tr ? tr.icon : '🎓'} ${esc(title)}</h2>
-    ${s ? `<details><summary>What to do</summary><p>${esc(s.do)}</p><p class="muted small">Aim: ${esc(s.goal)}</p></details>` : ''}
+    ${s ? `<details><summary>What to do</summary><p>${esc(s.do)}</p><p class="muted small">Aim: ${esc(s.goal)}</p>${videoButton(tr.id)}</details>` : ''}
     <div class="ses-time"><b id="ses-t">${sesClock(secs)}</b><button class="pill" id="ses-go">Start timer</button></div>
     <button class="clicker" id="ses-click" aria-label="Click: he got it"><span>${sound() ? 'Click' : 'Yes!'}</span><small>tap the moment he gets it</small></button>
     <div class="ses-count"><span><b id="ses-h">0</b> got it</span><button class="ghost" id="ses-miss">✗ Not yet</button><span><b id="ses-m">0</b> not yet</span></div>

@@ -604,6 +604,7 @@ EARLY_ACT.guide = d => {
   const g = GUIDES.find(x => x.id === d.id) || BEHAVIOUR.find(x => x.id === d.id);
   const hist = g.skill ? Store.list('train', r => r.skill === g.skill).slice(0, 4) : [];
   sheet(`<h2>${g.icon} ${esc(g.title)}</h2><p class="muted">${esc(g.why)}</p>
+    ${videoButton(g.id)}
     <h4>Steps</h4><ol class="steps">${g.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
     <div class="banner jindo">🐕 <b>Jindo tip:</b> ${esc(g.jindo)}</div>
     <h4>Common mistakes</h4><ul>${g.mistakes.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
@@ -614,7 +615,7 @@ EARLY_ACT.guide = d => {
 EARLY_ACT.game = d => {
   const g = GAMES.find(x => x.id === d.id), n = doneGames(g.id).length;
   sheet(`<h2>${g.icon} ${esc(g.title)}</h2><p class="muted">${esc(g.time)} · ${g.level === 1 ? 'easy' : 'a bit harder'} · you need: ${esc(g.need)}</p>
-    <p>${esc(g.how)}</p>${n ? `<p class="muted small">Done ${n} time${n > 1 ? 's' : ''} · last ${fmtDay(localDay(doneGames(g.id)[0].at))}</p>` : ''}
+    <p>${esc(g.how)}</p>${videoButton(g.id)}${n ? `<p class="muted small">Done ${n} time${n > 1 ? 's' : ''} · last ${fmtDay(localDay(doneGames(g.id)[0].at))}</p>` : ''}
     <div class="btns"><span class="grow"></span><button class="primary" data-act="gameDone" data-id="${g.id}">We did it 🎉</button></div>`);
 };
 

@@ -445,3 +445,5 @@ ol.steps li { margin-bottom: 6px; }
 .ses-count b { font-size: 22px; }
 .ses-snd { display: flex; align-items: center; gap: 6px; }
 .coach .h-row .link { white-space: nowrap; }
+.video-btn { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 10px 0; font-weight: 650; color: var(--ink); text-decoration: none; }
+.video-btn small { font-weight: 400; color: var(--muted); }
