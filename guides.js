@@ -303,7 +303,7 @@ const LEASH_PLAN = [
 ];
 
 /* Demo videos: each guide, plan track and some games open YouTube searched to
-   that exact skill from Kikopup (Emily Larlham), whose reward-based style
+   that exact skill, filtered to videos under 4 minutes (the sp= code) from Kikopup (Emily Larlham), whose reward-based style
    matches these guides. A search rather than a fixed video, so a link never
    breaks when a video is renamed or removed. Keys are guide, track or game ids. */
 const VIDEOS = {
@@ -316,5 +316,5 @@ const VIDEOS = {
 };
 function videoButton(key, label = 'Watch it demonstrated') {
   const q = VIDEOS[key]; if (!q) return '';
-  return `<a class="video-btn" href="https://www.youtube.com/results?search_query=${encodeURIComponent(q)}" target="_blank" rel="noopener">▶️ ${label}<small>trainer videos on YouTube</small></a>`;
+  return `<a class="video-btn" href="https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIYAQ%253D%253D" target="_blank" rel="noopener">▶️ ${label}<small>short trainer videos, under 4 min</small></a>`;
 }
