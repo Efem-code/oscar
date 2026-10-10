@@ -6,8 +6,8 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f6efe6",
-  "theme_color": "#f6efe6",
+  "background_color": "#1c1814",
+  "theme_color": "#1c1814",
   "categories": [
     "lifestyle",
     "photo"
