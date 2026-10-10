@@ -302,19 +302,33 @@ const LEASH_PLAN = [
   { title: 'Show-off walk', place: 'Busier place', do: 'Café strip, trailhead or park. Treat generously; leave if it’s too much. Film a clip for Oscar’s Diary!', goal: 'A loose-leash walk somewhere new. 🎉' },
 ];
 
-/* Demo videos: each guide, plan track and some games open YouTube searched to
-   that exact skill, filtered to videos under 4 minutes (the sp= code) from Kikopup (Emily Larlham), whose reward-based style
-   matches these guides. A search rather than a fixed video, so a link never
-   breaks when a video is renamed or removed. Keys are guide, track or game ids. */
+/* Demo videos: one short, to-the-point video per guide, plan track and some
+   games, hand-picked from reward-based trainers (Kikopup, Battersea and a few
+   others), all under 4 minutes. Keys are guide, track or game ids:
+   [YouTube id, what it shows, length, channel]. */
 const VIDEOS = {
-  recall: 'kikopup recall come puppy', leash: 'kikopup loose leash walking', leave: 'kikopup leave it',
-  settle: 'kikopup settle on a mat relax', strangers: 'kikopup shy dog meeting strangers', door: 'kikopup wait at the door',
-  handling: 'kikopup nail trim handling', drop: 'kikopup drop it', focus: 'kikopup attention game name',
-  sit: 'kikopup teach sit', down: 'kikopup teach down', stay: 'kikopup teach stay',
-  bark: 'kikopup stop barking', bite: 'kikopup puppy biting', plant: 'kikopup dog won’t walk on leash',
-  trick: 'kikopup easy dog tricks', findit: 'kikopup find it nose game', flirt: 'kikopup flirt pole',
+  recall:    ['rjd99MlmqqI', 'Come when called, puppy games', '2:51', 'Kikopup'],
+  leash:     ['sFgtqgiAKoQ', 'Stop pulling on the leash', '3:39', 'Kikopup'],
+  leave:     ['D9gTe0jPJbU', 'Leave it for puppies', '1:01', 'Kikopup'],
+  settle:    ['Xzyh9FMEnq8', 'Teaching a dog to settle', '2:24', 'Battersea'],
+  strangers: ['5vhqjUlsS_E', 'Dogs nervous of strangers', '3:25', 'Battersea'],
+  door:      ['zX3ChYTrpYs', 'Wait at the door', '3:55', 'Donna Hill'],
+  handling:  ['-tQrefk0Wyc', 'First game for nail trims', '3:42', 'Kikopup'],
+  drop:      ['gZvkyAFi7tc', 'How to train drop it', '2:19', 'Kikopup'],
+  focus:     ['wqoYc4VZCOg', 'Teach your puppy his name', '3:12', 'Kikopup'],
+  sit:       ['vpZFuoPv_Js', 'Teaching sit', '1:38', 'Battersea'],
+  down:      ['q2Mha5zDqns', 'Teaching lie down', '2:40', 'Chewy'],
+  stay:      ['BIhJj8YvG7A', 'A fun game to teach stay', '3:23', 'Kikopup'],
+  bark:      ['X5BjvNScFPs', 'Barking at things that worry him', '3:05', 'Kikopup'],
+  bite:      ['WtXq5II3nNk', 'Stopping puppy mouthing', '3:14', 'Battersea'],
+  night:     ['FxED-0aEKfI', 'Puppy crying at night', '2:10', 'Chewy'],
+  plant:     ['O-PaoWNkei0', 'When your dog stops on walks', '3:59', 'FernDog'],
+  trick:     ['_aTBMKgOO7w', 'An easy, cute trick', '3:13', 'Kikopup'],
+  findit:    ['a6EpkifmRik', 'Beginner search and find games', '2:43', 'Steve Bettcher'],
+  flirt:     ['PX_c5jJELQ0', 'Using a flirt pole', '1:19', 'Pupford'],
 };
-function videoButton(key, label = 'Watch it demonstrated') {
-  const q = VIDEOS[key]; if (!q) return '';
-  return `<a class="video-btn" href="https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIYAQ%253D%253D" target="_blank" rel="noopener">▶️ ${label}<small>short trainer videos, under 4 min</small></a>`;
+function videoButton(key) {
+  const v = VIDEOS[key]; if (!v) return '';
+  const [id, what, len, by] = v;
+  return `<a class="video-btn" href="https://www.youtube.com/watch?v=${id}" target="_blank" rel="noopener">▶️ Watch: ${what}<small>${len} · ${by} on YouTube</small></a>`;
 }
