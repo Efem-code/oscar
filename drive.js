@@ -106,11 +106,16 @@ const Drive = (() => {
     });
   }
 
+  /* Bridge calls during uploads go one at a time (Apps Script doesn't like many at once);
+     the big direct-to-Google transfers run in parallel. */
+  let bridgeTurn = Promise.resolve();
+  const oneAtATime = fn => { const r = bridgeTurn.then(fn, fn); bridgeTurn = r.catch(() => {}); return r; };
+
   async function upload(p, onProgress) {
     const meta = { name: p.name, mime: p.mime || 'application/octet-stream', role: p.role === 'view' ? 'thumb' : p.role, doc: !!p.doc, ym: p.ym };
     if (direct && p.blob.size > 512 * 1024) {
       try {
-        const { session, cors } = await call('upStart', { ...meta, size: p.blob.size, origin: location.origin });
+        const { session, cors } = await oneAtATime(() => call('upStart', { ...meta, size: p.blob.size, origin: location.origin }));
         if (cors) return await putDirect(session, p.blob, onProgress);
         direct = false;                                    // bridge too old to open browser sessions
       } catch (e) {
@@ -119,13 +124,13 @@ const Drive = (() => {
       }
     }
     if (p.blob.size <= SMALL) {
-      const r = await call('put', { ...meta, b64: await b64(p.blob) });
+      const r = await oneAtATime(async () => call('put', { ...meta, b64: await b64(p.blob) }));
       onProgress(1);
       return r.id;
     }
-    const { session } = await call('upStart', { ...meta, size: p.blob.size });
+    const { session } = await oneAtATime(() => call('upStart', { ...meta, size: p.blob.size }));
     for (let off = 0; off < p.blob.size; off += CHUNK) {
-      const r = await call('upChunk', { session, offset: off, size: p.blob.size, b64: await b64(p.blob.slice(off, off + CHUNK)) });
+      const r = await oneAtATime(async () => call('upChunk', { session, offset: off, size: p.blob.size, b64: await b64(p.blob.slice(off, off + CHUNK)) }));
       onProgress(Math.min(1, (off + CHUNK) / p.blob.size));
       if (r.done) return r.id;
     }
@@ -215,28 +220,42 @@ const Drive = (() => {
 
   async function uploadAll() {
     // Thumbnails, then screen-size copies, then photos, then videos — smallest first — so most things land quickly.
+    // Three at a time: one connection rarely fills the phone's upload speed, especially on Wi-Fi.
     const rank = p => p.role === 'thumb' ? 0 : p.role === 'view' ? 1 : (p.mime || '').startsWith('video') ? 3 : 2;
     const queue = (await Store.pendAll()).sort((a, b) => rank(a) - rank(b) || (a.blob?.size || 0) - (b.blob?.size || 0));
     if (!queue.length) return;
-    const total = queue.reduce((a, p) => a + (p.blob?.size || 0), 0);
-    let done = 0;
+    const total = queue.reduce((a, p) => a + (p.blob?.size || 0), 0), started = Date.now();
+    const live = new Map();               // pending id → bytes sent so far
+    let done = 0, finished = 0, next = 0, failed = null;
+    const report = name => {
+      const sent = done + [...live.values()].reduce((a, b) => a + b, 0), secs = (Date.now() - started) / 1000;
+      const left = sent > 2e5 && secs > 3 ? (total - sent) / (sent / secs) : null;
+      state.upload = { name, n: Math.min(finished + 1, queue.length), of: queue.length, frac: total ? sent / total : 0,
+        doneMB: sent / 1e6, totalMB: total / 1e6, left }; emit();
+    };
     keepAwake(true);
-    for (let i = 0; i < queue.length; i++) {
-      const p = queue[i], size = p.blob?.size || 0;
-      const rec = Store.get(p.recId);
-      if (!rec) {
-        // Only drop the upload if the photo was really deleted — not merely unknown to this copy.
-        const r = await Store.raw(p.recId);
-        if (!r || r.deleted) await Store.pendDel(p.id);
-        done += size; continue;
+    async function worker() {
+      while (next < queue.length && !failed) {
+        const p = queue[next++], size = p.blob?.size || 0;
+        const rec = Store.get(p.recId);
+        if (!rec) {
+          // Only drop the upload if the photo was really deleted — not merely unknown to this copy.
+          const r = await Store.raw(p.recId);
+          if (!r || r.deleted) await Store.pendDel(p.id);
+          done += size; finished++; continue;
+        }
+        live.set(p.id, 0); report(p.name);
+        try {
+          const id = await upload(p, f => { live.set(p.id, f * size); report(p.name); });
+          await Store.put({ id: rec.id, [{ thumb: 'thumbId', view: 'viewId' }[p.role] || 'driveId']: id });
+          await Store.pendDel(p.id);
+        } catch (e) { failed = failed || e; return; } finally { live.delete(p.id); }
+        done += size; finished++; report(p.name);
+        soon(1500);              // let the other phone see it without waiting for the whole queue
       }
-      state.upload = { name: p.name, n: i + 1, of: queue.length, frac: 0, doneMB: done / 1e6, totalMB: total / 1e6 }; emit();
-      const id = await upload(p, f => { state.upload.frac = f; state.upload.doneMB = (done + f * size) / 1e6; emit(); });
-      await Store.put({ id: rec.id, [{ thumb: 'thumbId', view: 'viewId' }[p.role] || 'driveId']: id });
-      await Store.pendDel(p.id);
-      done += size;
-      soon(1500);                // let the other phone see it without waiting for the whole queue
     }
+    await Promise.all([worker(), worker(), worker()]);   // all three stop before the queue is let go, so nothing uploads twice
+    if (failed) throw failed;
   }
 
   async function sync() {

@@ -326,7 +326,7 @@ function syncChip() {
     idle: ['ok', s.last ? 'Synced' : 'Connected'],
   };
   let [cls, txt] = map[s.status] || map.off;
-  if (s.upload) { cls = 'busy'; txt = s.upload.totalMB > 20 ? `Uploading ${Math.round(s.upload.doneMB)} of ${Math.round(s.upload.totalMB)} MB` : `Uploading ${s.upload.n}/${s.upload.of}`; }
+  if (s.upload) { cls = 'busy'; const u = s.upload, left = u.left == null ? '' : u.left < 60 ? ' · <1 min left' : ` · ~${Math.round(u.left / 60)} min left`; txt = (u.totalMB > 20 ? `Uploading ${Math.round(u.doneMB)} of ${Math.round(u.totalMB)} MB` : `Uploading ${u.n} of ${u.of}`) + left; }
   return `<button class="sync ${cls}" data-act="syncTap" title="${esc(s.msg)}"><i></i>${txt}</button>`;
 }
 
