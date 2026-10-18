@@ -67,13 +67,13 @@ const Push = (() => {
   /* Must run from a tap (iOS asks for permission only then). Every failure
      says exactly what to do, since the iPhone gives no clue itself. */
   async function enable() {
-    if (isIOS() && !standalone()) throw new Error('This is open in Safari, not as an app. Delete the Oscar icon, then in Safari: Share → Add to Home Screen → turn ON “Open as Web App” → Add. Open it from the new icon and try again.');
+    if (isIOS() && !standalone()) throw new Error(`This is open in Safari, not as an app. Delete the ${EDITION.name} icon, then in Safari: Share → Add to Home Screen → turn ON “Open as Web App” → Add. Open it from the new icon and try again.`);
     if (!supported()) throw new Error(isIOS() ? 'This iPhone doesn’t offer web notifications here — check it’s opened from the Home Screen icon.' : 'This browser can’t do push notifications.');
-    if (Notification.permission === 'denied') throw new Error(isIOS() ? 'Notifications were turned off for this app. iPhone Settings → Notifications → Oscar → Allow Notifications, then try again.' : 'Notifications are blocked — allow them in the phone’s settings for this app.');
+    if (Notification.permission === 'denied') throw new Error(isIOS() ? `Notifications were turned off for this app. iPhone Settings → Notifications → ${EDITION.name} → Allow Notifications, then try again.` : 'Notifications are blocked — allow them in the phone’s settings for this app.');
     let perm;
     try { perm = await Notification.requestPermission(); } catch (e) { throw new Error('The permission prompt failed: ' + e.message); }
     if (perm !== 'granted') throw new Error(perm === 'denied'
-      ? (isIOS() ? 'You tapped Don’t Allow. iPhone Settings → Notifications → Oscar → Allow Notifications.' : 'Notifications were refused — allow them in the phone’s settings.')
+      ? (isIOS() ? `You tapped Don’t Allow. iPhone Settings → Notifications → ${EDITION.name} → Allow Notifications.` : 'Notifications were refused — allow them in the phone’s settings.')
       : 'The permission question was dismissed — tap Turn on again and choose Allow.');
     try {
       const v = await vapid();

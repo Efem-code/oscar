@@ -32,7 +32,7 @@ const money = n => n === '' || n == null ? '' : '$' + Number(n).toFixed(2);
 /* ---------- Oscar ---------- */
 const P = () => Store.get('profile') || {};
 const App = {
-  pet: () => P().name || 'Oscar',
+  pet: () => P().name || (EDITION.public ? 'your puppy' : 'Oscar'),
   ageDays(at = Date.now()) {
     const b = P().birthday; if (!b) return null;
     return Math.floor((new Date(at) - parseDay(b)) / 864e5);
@@ -606,7 +606,7 @@ EARLY_ACT.guide = d => {
   sheet(`<h2>${g.icon} ${esc(g.title)}</h2><p class="muted">${esc(g.why)}</p>
     ${videoButton(g.id)}
     <h4>Steps</h4><ol class="steps">${g.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
-    <div class="banner jindo">🐕 <b>Jindo tip:</b> ${esc(g.jindo)}</div>
+    ${isJindo() ? `<div class="banner jindo">🐕 <b>Jindo tip:</b> ${esc(g.jindo)}</div>` : ''}
     <h4>Common mistakes</h4><ul>${g.mistakes.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
     ${g.vet ? `<div class="banner vet">🩺 <b>When to get help:</b> ${esc(g.vet)}</div>` : ''}
     ${hist.length ? `<h4>Recent sessions</h4><div class="hist">${hist.map(h => `<span>${fmtDay(localDay(h.at))} ${'★'.repeat(h.rating || 0)}${'☆'.repeat(5 - (h.rating || 0))}</span>`).join('')}</div>` : ''}
@@ -675,6 +675,8 @@ VIEWS.grow = () => {
     </div></div>`;
 };
 
+/* Jindo-specific tips: always in Oscar's copy; in the public copy only for a Jindo. */
+const isJindo = () => !EDITION.public || /jindo/i.test(P().breed || '');
 const breedNotes = () => { const b = (P().breed || '').toLowerCase(); return Object.entries(BREED_NOTES).find(([k]) => b.includes(k))?.[1] || null; };
 function skillList() {
   const extra = new Set([...(breedNotes()?.skills || []), ...Store.list('train').map(r => r.skill)]);
@@ -819,6 +821,7 @@ VIEWS.memories = () => {
    videos, saved to Drive → Reels, and listed here as `reel` records. Posting
    stays one tap and yours: Share → Instagram, with the caption copied. */
 function reelsStrip() {
+  if (EDITION.public) return '';             // reels are made by Oscar's Mac
   const reels = Store.list('reel').sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0) || (a.option || '').localeCompare(b.option || ''));
   const reqs = Store.list('reelreq', r => r.status === 'pending' || r.status === 'failed');
   return `<section class="card"><div class="h-row"><h3>🎬 Reels</h3><button class="pill" data-act="pickStart">＋ Make your own</button></div>
@@ -976,7 +979,7 @@ VIEWS.more = () => {
       ${wishes().length ? '<button class="link" data-act="wishCopy">Copy list</button>' : ''}
     </section>
     <section class="card"><h3>Share & export</h3>
-      <button class="item-main block" data-act="brand"><span class="ico">📣</span><span><b>Oscar brand kit</b><small>${esc(BRAND.handle)} — content pillars, posting rhythm, bio</small></span></button>
+      ${EDITION.public ? '' : `<button class="item-main block" data-act="brand"><span class="ico">📣</span><span><b>Oscar brand kit</b><small>${esc(BRAND.handle)} — content pillars, posting rhythm, bio</small></span></button>`}
       <button class="item-main block" data-act="book"><span class="ico">📖</span><span><b>${esc(App.pet())}’s photo book</b><small>Portraits, milestones and favourites as a printable book (PDF)</small></span></button>
       <button class="item-main block" data-act="prep"><span class="ico">🏠</span><span><b>Getting-ready checklist</b><small>${prepItems().done}/${prepItems().total} done</small></span></button>
       <button class="item-main block" data-act="careSheet"><span class="ico">📋</span><span><b>Care sheet</b><small>One page for a sitter, groomer or new vet — print or share</small></span></button>
@@ -1148,7 +1151,7 @@ ACT.poison = async () => { for (const c of POISON_LINES) await Store.put({ kind:
 
 /* Profile / you */
 ACT.profile = () => form({ title: '🐶 Profile', value: P(), fields: [
-  { type: 'row', fields: [{ k: 'name', label: 'Name', required: true, def: 'Oscar' }, { k: 'breed', label: 'Breed' }] },
+  { type: 'row', fields: [{ k: 'name', label: 'Name', required: true, def: EDITION.public ? '' : 'Oscar' }, { k: 'breed', label: 'Breed' }] },
   { type: 'row', fields: [{ k: 'birthday', label: 'Birthday', type: 'date' }, { k: 'homeDay', label: 'Came home', type: 'date' }] },
   { type: 'row', fields: [{ k: 'sex', label: 'Sex', type: 'select', options: ['', 'Male', 'Male (neutered)', 'Female', 'Female (spayed)'] }, { k: 'colour', label: 'Colour / markings' }] },
   { type: 'row', fields: [{ k: 'microchip', label: 'Microchip #' }, { k: 'chipRegistry', label: 'Chip registry' }] },
@@ -1333,9 +1336,10 @@ ACT.syncSettings = () => {
     ${on ? `<div class="step ok"><b>Connected to “${esc(Drive.folderName())}”</b>
         <p>${Drive.folderLink() ? `<a href="${Drive.folderLink()}" target="_blank" rel="noopener">Open in Drive</a> · ` : ''}<button class="link" id="disc">Disconnect</button></p>
         <p class="small muted">${esc(syncLine())}</p></div>
-        <p><button class="primary" id="snow">Sync now</button></p>`
-    : `<div class="step"><b>Connection code</b>
-        <p class="small muted">Paste the code from the Puppy Log bridge (see SETUP.md). Use the same code on both phones — no Google sign-in needed.</p>
+        <p><button class="primary" id="snow">Sync now</button> <button class="ghost" id="invite">📲 Invite a phone</button></p>`
+    : `${EDITION.public ? `<div class="step"><b>First phone? Set up sharing</b><p class="small muted">About 10 minutes, once, in your own Google Drive. Then every phone joins with one link.</p><button class="primary" id="wiz">Set it up</button></div>` : ''}
+      <div class="step"><b>${EDITION.public ? 'Already set up? Paste the link or code' : 'Connection code'}</b>
+        <p class="small muted">${EDITION.public ? 'From the phone that set it up: More → Sync & sharing → Invite a phone.' : 'Paste the code from the Puppy Log bridge (see SETUP.md). Use the same code on both phones — no Google sign-in needed.'}</p>
         <div class="inline"><input id="ccode" placeholder="paste code"><button class="pill" id="cgo">Connect</button></div></div>`}`, r => {
     $('#cgo', r) && ($('#cgo', r).onclick = async () => {
       const b = $('#cgo', r); b.disabled = true; b.textContent = 'Checking…';
@@ -1344,8 +1348,82 @@ ACT.syncSettings = () => {
     });
     $('#disc', r) && ($('#disc', r).onclick = () => { if (confirm('Stop syncing on this phone? Nothing is deleted.')) { Drive.disconnect(); ACT.syncSettings(); } });
     $('#snow', r) && ($('#snow', r).onclick = () => { Drive.sync(); closeSheet(); });
+    $('#invite', r) && ($('#invite', r).onclick = () => inviteSheet());
+    $('#wiz', r) && ($('#wiz', r).onclick = () => bridgeWizard());
   });
 };
+
+/* Another phone joins by opening this link (it carries the bridge address and key — share it only with family). */
+function inviteSheet(first) {
+  const link = Drive.inviteLink();
+  sheet(`<h2>📲 ${first ? 'Connected! Now add the phones' : 'Invite a phone'}</h2>
+    <p class="muted">Open this link on each phone that should share ${esc(App.pet())}’s log — text or email it to yourself and your partner. It connects in one tap.</p>
+    <p class="small muted">Anyone with the link can read and add to the log, so only send it to family.</p>
+    <textarea readonly rows="4" class="mono">${esc(link)}</textarea>
+    <div class="btns"><button class="ghost" id="inv-copy">Copy link</button><span class="grow"></span>${navigator.share ? '<button class="primary" id="inv-share">Share…</button>' : ''}</div>`, r => {
+    $('#inv-copy', r).onclick = async () => { try { await navigator.clipboard.writeText(link); toast('Link copied'); } catch { r.querySelector('textarea').select(); } };
+    $('#inv-share', r) && ($('#inv-share', r).onclick = () => navigator.share({ title: `${App.pet()}’s puppy log`, text: 'Open this on your phone to join', url: link }).catch(() => {}));
+  });
+}
+
+/* Public copy: set up your own bridge (a tiny Google Apps Script in your own account), step by step. */
+function bridgeWizard() {
+  let w = {};
+  try { w = JSON.parse(Store.pref('oscar.wizard') || '{}'); } catch {}
+  if (!w.key) {                                   // the private key that goes into their script — kept until they finish
+    const b = crypto.getRandomValues(new Uint8Array(24));
+    w.key = btoa(String.fromCharCode(...b)).replace(/[+/=]/g, '').slice(0, 30);
+    Store.setPref('oscar.wizard', JSON.stringify(w));
+  }
+  const save = () => Store.setPref('oscar.wizard', JSON.stringify(w));
+  const folderId = v => (String(v).match(/folders\/([\w-]{10,})/) || String(v).match(/^\s*([\w-]{20,})\s*$/) || [])[1];
+  sheet(`<h2>☁️ Set up sharing</h2>
+    <p class="muted">Photos, videos and the log go into a Google Drive folder of yours, and every phone stays in sync. Easiest on a computer — open this same web address there; you’ll finish with a link to open on each phone.</p>
+    <div class="step"><b>1. Make a folder in Google Drive</b>
+      <p class="small muted"><a href="https://drive.google.com/drive/my-drive" target="_blank" rel="noopener">drive.google.com</a> → New → New folder (e.g. “${esc(App.pet())} 🐾”). Open it and copy the address from the address bar.</p>
+      <input id="wz-folder" placeholder="https://drive.google.com/drive/folders/…" value="${esc(w.folder || '')}"></div>
+    <div class="step"><b>2. Copy your bridge script</b>
+      <p class="small muted">A small script that lets the app save into that folder. It runs in your own Google account, and only works with the private key written inside it.</p>
+      <button class="pill" id="wz-copy">Copy script</button> <span class="small muted" id="wz-copied"></span></div>
+    <div class="step"><b>3. Put it in Google</b>
+      <ol class="small">
+        <li>Open <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → New project</a>.</li>
+        <li>Select everything in the editor, delete it, and paste. Click 💾 Save.</li>
+        <li><b>Deploy → New deployment</b> → the ⚙️ next to “Select type” → <b>Web app</b>. Execute as: <b>Me</b>. Who has access: <b>Anyone</b>. Then <b>Deploy</b>.</li>
+        <li><b>Authorize access</b> → choose your account → “Google hasn’t verified this app” → <b>Advanced</b> → <b>Go to … (unsafe)</b> → <b>Allow</b>. The warning is normal: it’s your own script in your own account.</li>
+        <li>Copy the <b>Web app URL</b> (it ends in <code>/exec</code>).</li>
+      </ol></div>
+    <div class="step"><b>4. Paste the Web app URL</b>
+      <div class="inline"><input id="wz-url" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(w.url || '')}"><button class="primary" id="wz-go">Connect</button></div></div>`, r => {
+    $('#wz-folder', r).onchange = e => { w.folder = e.target.value.trim(); save(); };
+    $('#wz-copy', r).onclick = async () => {
+      const id = folderId($('#wz-folder', r).value);
+      if (!id) { toast('Paste the folder’s address from step 1 first'); $('#wz-folder', r).focus(); return; }
+      w.folder = $('#wz-folder', r).value.trim(); save();
+      const code = (await (await fetch('./bridge/Code.gs', { cache: 'no-store' })).text())
+        .replace("'PASTE_FOLDER_ID'", `'${id}'`).replace("'PASTE_A_LONG_RANDOM_KEY'", `'${w.key}'`);
+      try { await navigator.clipboard.writeText(code); $('#wz-copied', r).textContent = '✓ Copied — now step 3'; }
+      catch { sheet(`<h2>Copy this script</h2><textarea rows="14" class="mono">${esc(code)}</textarea><div class="btns"><span class="grow"></span><button class="primary" onclick="bridgeWizard()">Back to the steps</button></div>`); }
+    };
+    $('#wz-go', r).onclick = async () => {
+      const u = $('#wz-url', r).value.trim().replace(/\?.*$/, '');
+      if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(u)) { toast('That should be the Web app URL ending in /exec'); return; }
+      w.url = u; save();
+      const b = $('#wz-go', r); b.disabled = true; b.textContent = 'Checking…';
+      try {
+        const name = await Drive.connect(btoa(JSON.stringify({ u, k: w.key })));
+        Store.setPref('oscar.wizard', '');
+        try { await Drive.call('setupReminders'); } catch {}      // morning reminders, meal checks, evening summary
+        Drive.sync();
+        toast(`Connected to “${esc(name)}”`);
+        inviteSheet(true);
+      } catch (e) {
+        b.disabled = false; b.textContent = 'Connect';
+        toast(/Wrong key/.test(e.message) ? 'The script’s key doesn’t match — copy the script again (step 2), paste it, and Deploy → Manage deployments → New version.' : esc(e.message));
+      }
+    };
+  });
+}
 
 /* ---------- appointments ---------- */
 /* Booked ahead (vet, groomer…). Once it has happened, "Log the visit" turns a
@@ -1686,7 +1764,8 @@ const APP_LINKS = {
 };
 const appCfg = k => {
   const d = APP_LINKS[k], p = n => Store.pref(`oscar.${d.pref}${n}`);
-  return { ...d, key: k, on: p('') !== 'off', name: p('Name') || d.name, pkg: p('Pkg') || d.pkg, scheme: p('Scheme') || d.scheme,
+  return { ...d, key: k, on: EDITION.public ? p('') === 'on' : p('') !== 'off',     // the public copy starts with these off
+    name: p('Name') || d.name, pkg: p('Pkg') || d.pkg, scheme: p('Scheme') || d.scheme,
     shortcut: p('Shortcut') || `Open ${p('Name') || d.name}`, shortcutReady: !!p('ShortcutReady') };
 };
 const camName = () => appCfg('cam').name;
@@ -1782,7 +1861,7 @@ function planCard() {
   const n = st.done.size, pct = Math.round(100 * n / LEASH_PLAN.length);
   return `<section class="card"><div class="h-row"><h3>🦮 2-week walking plan</h3><span class="muted small">${n}/${LEASH_PLAN.length}</span></div>
     <div class="goal-bar"><i style="width:${pct}%"></i></div>
-    ${st.finished ? '<p>🎉 Plan finished! Keep the rule going on every walk — and film a show-off walk for Oscar’s Diary.</p>' : ''}
+    ${st.finished ? `<p>🎉 Plan finished! Keep the rule going on every walk${EDITION.public ? '' : ' — and film a show-off walk for Oscar’s Diary'}.</p>` : ''}
     <div class="plan-days">${LEASH_PLAN.map((d, i) => `<button class="pday ${st.done.has(i + 1) ? 'done' : ''} ${st.next === i + 1 ? 'next' : ''}" data-act="planDay" data-n="${i + 1}">
       <b>${st.done.has(i + 1) ? '✓' : i + 1}</b><small>${esc(d.title)}</small></button>`).join('')}</div>
     <button class="link" data-act="planStop">${st.finished ? 'Start again' : 'Restart or stop the plan'}</button></section>`;
@@ -1803,7 +1882,7 @@ ACT.planDay = d => {
     <p class="muted">${esc(day.place)}</p>
     <h4>Today</h4><p>${esc(day.do)}</p>
     <h4>You’re aiming for</h4><p>${esc(day.goal)}</p>
-    ${n === 1 ? '<div class="banner jindo">🐕 A collar puts all the pull on his throat. Use a snug, escape-proof front-clip harness for walks — Jindos are known for backing out of loose gear.</div>' : ''}
+    ${n === 1 ? `<div class="banner jindo">🐕 A collar puts all the pull on his throat. Use a snug, escape-proof front-clip harness for walks ${isJindo() ? ' — Jindos are known for backing out of loose gear' : ' — puppies can back out of loose gear'}.</div>` : ''}
     ${rec ? `<p class="muted small">✓ Done ${fmtDay(localDay(rec.at))}${rec.by ? ' by ' + esc(rec.by) : ''}${rec.rating ? ' · ' + '★'.repeat(rec.rating) : ''}</p>` : `
     <h4>How did it go?</h4>
     <div class="chips" id="pd-rate">${[1, 2, 3, 4, 5].map(k => `<button class="chip" data-r="${k}">${k}${k === 1 ? ' · rough' : k === 5 ? ' · great' : ''}</button>`).join('')}</div>
@@ -1906,7 +1985,7 @@ function onboard() {
   form({ title: 'Welcome 🐾', saveLabel: 'Let’s go',
     intro: '<p class="muted">A few basics. Everything can be changed later in More.</p>',
     fields: [
-      { k: 'name', label: 'Puppy’s name', required: true, def: 'Oscar' }, { k: 'breed', label: 'Breed' },
+      { k: 'name', label: 'Puppy’s name', required: true, def: EDITION.public ? '' : 'Oscar' }, { k: 'breed', label: 'Breed' },
       { type: 'row', fields: [{ k: 'birthday', label: 'Birthday', type: 'date', hint: 'best guess is fine' }, { k: 'homeDay', label: 'Home day', type: 'date' }] },
       { k: 'me', label: 'Your name', required: true, hint: 'so you can tell who logged what' },
       { k: 'unit', label: 'Weight in', type: 'chips', options: ['kg', 'lb'], def: 'kg' }],

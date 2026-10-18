@@ -273,7 +273,7 @@ const Media = (() => {
       ${ghost ? `<img class="ghost" src="${ghost}" alt="">` : ''}
       <div class="cam-top">
         <button class="cam-x" aria-label="Close">✕</button>
-        <div class="cam-tip">${ghost ? 'Line Oscar up with last week’s ghost — same spot, same angle.' : 'First portrait! Pick a spot you can repeat every week.'}</div>
+        <div class="cam-tip">${ghost ? `Line ${esc(App.pet())} up with last week’s ghost — same spot, same angle.` : 'First portrait! Pick a spot you can repeat every week.'}</div>
       </div>
       <div class="cam-bar">
         ${ghost ? '<label class="cam-ghost">Ghost <input type="range" min="0" max="80" value="35"></label>' : '<span></span>'}

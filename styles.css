@@ -447,3 +447,8 @@ ol.steps li { margin-bottom: 6px; }
 .coach .h-row .link { white-space: nowrap; }
 .video-btn { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 10px 0; font-weight: 650; color: var(--ink); text-decoration: none; }
 .video-btn small { font-weight: 400; color: var(--muted); }
+
+/* invite link / script boxes */
+textarea.mono { width: 100%; font: 12px/1.4 ui-monospace, Menlo, monospace; word-break: break-all; }
+.step ol { margin: 6px 0 0; padding-left: 20px; }
+.step ol li { margin: 4px 0; }

@@ -317,7 +317,9 @@ const Drive = (() => {
   }
 
   return {
-    state, onChange: f => listeners.add(f), configured, connect, disconnect, fromHash,
+    state, onChange: f => listeners.add(f), configured, connect, disconnect, fromHash, call,
+    /* A link that connects another phone in one tap (same bridge, same key). */
+    inviteLink: () => configured() ? `${location.origin}${location.pathname}#connect=${btoa(JSON.stringify({ u: url(), k: key() })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}` : '',
     sync, soon, download, trash, relay,
     folderName: () => Store.pref('oscar.folderName') || '',
     webLink: id => `https://drive.google.com/file/d/${id}/view`,
