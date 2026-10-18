@@ -2,11 +2,12 @@
 /* BUILD is rewritten by deploy.sh on every deploy. It has to change or the
    browser sees an identical service worker, keeps the old one, and the update
    never reaches the phone. */
+importScripts('./edition.js');   // EDITION: Oscar's copy or the public one
 const BUILD = '20261017-170140';
 const PREFIX = 'oscar-';
 const CACHE = PREFIX + BUILD;
 const SHELL = [
-  './', './index.html', './styles.css', './edition.js', './data.js', './guides.js', './store.js', './drive.js', './media.js', './push.js', './app.js', './ask.js', './coach.js',
+  './', './index.html', './styles.css', './edition.js', './data.js', './guides.js', './cat.js', './store.js', './drive.js', './media.js', './push.js', './app.js', './ask.js', './coach.js',
   './manifest.webmanifest', './icon-192.png', './icon-512.png'
 ];
 
@@ -36,6 +37,8 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   if (new URL(req.url).origin !== location.origin) return;
+  /* The public copy is named after the pet: the browser gets a manifest with their name, so Install / Add to Home screen offers it. */
+  if (EDITION.public && new URL(req.url).pathname.endsWith('/manifest.webmanifest')) { e.respondWith(petManifest(req)); return; }
 
   /* Stale-while-revalidate: answer instantly from the cache so a tip never
      waits on the network, but always refetch in the background so a redeploy
@@ -69,6 +72,25 @@ self.addEventListener('push', e => {
     });
   })());
 });
+
+async function petName() {
+  try {
+    if (indexedDB.databases && !(await indexedDB.databases()).some(x => x.name === 'oscar')) return '';
+    const db = await new Promise((res, rej) => { const r = indexedDB.open('oscar'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    if (!db.objectStoreNames.contains('recs')) { db.close(); return ''; }
+    const p = await new Promise(res => { const q = db.transaction('recs').objectStore('recs').get('profile'); q.onsuccess = () => res(q.result); q.onerror = () => res(null); });
+    db.close();
+    return (p && !p.deleted && p.name || '').trim();
+  } catch { return ''; }
+}
+
+async function petManifest(req) {
+  const res = await fetch(req, { cache: 'no-cache' }).catch(() => caches.match(req, { cacheName: CACHE }));
+  if (!res || !res.ok) return res || Response.error();
+  const m = await res.json(), name = await petName();
+  if (name) { m.name = name; m.short_name = name; }
+  return new Response(JSON.stringify(m), { headers: { 'Content-Type': 'application/manifest+json' } });
+}
 
 /* Scheduled notifications (8 am reminder, meal check, 9 pm summary) are built
    by the bridge from both phones' data; an empty push means "come and get it". */

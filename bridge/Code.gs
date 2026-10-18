@@ -217,7 +217,7 @@ const clock_ = t => { if (!t) return ''; const p = t.split(':').map(Number); ret
 /* 8 am: appointments, classes and health items due today/tomorrow (or overdue). */
 function morningMessage_(recs) {
   const today = day_(), tomorrow = day_(new Date(Date.now() + 864e5)), rs = all_(recs);
-  const pet = (recs.profile || {}).name || 'Your puppy';
+  const pet = (recs.profile || {}).name || ((recs.profile || {}).species === 'cat' ? 'Your kitten' : 'Your puppy');
   const when = d => d < today ? 'overdue' : d === today ? 'today' : 'tomorrow';
   const appts = rs.filter(r => r.kind === 'appt' && !r.visitId && !r.cancelled && (r.day === today || r.day === tomorrow)).sort((a, b) => (a.day + (a.time || '')) < (b.day + (b.time || '')) ? -1 : 1);
   const lessons = rs.filter(r => r.kind === 'lesson' && !r.done && (r.due === today || r.due === tomorrow)).sort((a, b) => a.due < b.due ? -1 : 1);
@@ -278,7 +278,7 @@ function mealCheck() {
   const slot = times[0];
   const fed = all_(recs).some(r => r.kind === 'log' && r.type === 'meal' && new Date(r.at).getTime() >= slot.ms - 90 * 6e4);
   if (fed) return 'fed';
-  const pet = (recs.profile || {}).name || 'Your puppy';
+  const pet = (recs.profile || {}).name || ((recs.profile || {}).species === 'cat' ? 'Your kitten' : 'Your puppy');
   return sendAll_({ title: '🍖 ' + pet + '’s ' + clock_(slot.t) + ' meal', body: 'Nobody has logged it yet — tap Meal once he’s fed.', tag: 'meal', url: './#today' });
 }
 
@@ -296,9 +296,11 @@ function eveningSummary(dry) {
     else if (e.type === 'wake' && from !== null) { sleep += Math.max(0, Math.min(t, end) - Math.max(from, start)); from = null; } });
   if (from !== null) sleep += Math.max(0, end - Math.max(from, start));
   const food = rs.filter(r => r.kind === 'food').sort((a, b) => a.at < b.at ? 1 : -1)[0];
-  const pet = (recs.profile || {}).name || 'Your puppy';
-  const bits = ['💧 ' + n('pee'), '💩 ' + n('poop'), (n('accident') ? '⚠️ ' + n('accident') + ' accident' + (n('accident') > 1 ? 's' : '') : '✅ no accidents'),
-    '🍖 ' + n('meal') + (food && food.mealsPerDay ? '/' + food.mealsPerDay : '') + ' meals',
+  const cat = (recs.profile || {}).species === 'cat';
+  const pet = (recs.profile || {}).name || (cat ? 'Your kitten' : 'Your puppy');
+  const bits = [...(cat ? ['🪣 ' + n('litter') + ' litter'] : ['💧 ' + n('pee'), '💩 ' + n('poop')]),
+    (n('accident') ? '⚠️ ' + n('accident') + (cat ? ' outside the box' : ' accident' + (n('accident') > 1 ? 's' : '')) : '✅ no accidents'),
+    (cat ? '🐟 ' : '🍖 ') + n('meal') + (food && food.mealsPerDay ? '/' + food.mealsPerDay : '') + ' meals',
     walks.length ? '🦮 ' + walks.length + ' walk' + (walks.length > 1 ? 's' : '') + (walkMin ? ' (' + walkMin + ' min)' : '') : '',
     sleep ? '😴 ' + (sleep / 36e5).toFixed(1) + ' h sleep' : ''].filter(Boolean);
   return sendAll_({ title: '🌙 ' + pet + '’s day', body: bits.join(' · '), tag: 'summary', url: './#today' }, dry);

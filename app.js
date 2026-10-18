@@ -32,7 +32,7 @@ const money = n => n === '' || n == null ? '' : '$' + Number(n).toFixed(2);
 /* ---------- Oscar ---------- */
 const P = () => Store.get('profile') || {};
 const App = {
-  pet: () => P().name || (EDITION.public ? 'your puppy' : 'Oscar'),
+  pet: () => P().name || (EDITION.public ? `your ${P().species === 'cat' ? 'kitten' : 'puppy'}` : 'Oscar'),
   ageDays(at = Date.now()) {
     const b = P().birthday; if (!b) return null;
     return Math.floor((new Date(at) - parseDay(b)) / 864e5);
@@ -292,7 +292,7 @@ function daySummary(day) {
     else if (e.type === 'wake' && from != null) { sleep += Math.max(0, Math.min(T(e.at), end) - Math.max(from, start)); from = null; }
   }
   if (from != null) sleep += Math.max(0, Math.min(Date.now(), end) - Math.max(from, start));
-  return { logs, pee: c('pee'), poop: c('poop'), accident: c('accident'), meal: c('meal'), sleepH: sleep / 36e5 };
+  return { logs, pee: c('pee'), poop: c('poop'), litter: c('litter'), accident: c('accident'), meal: c('meal'), sleepH: sleep / 36e5 };
 }
 
 /* ---------- health helpers ---------- */
@@ -315,7 +315,7 @@ function healthRow(r) {
 /* ---------- views ---------- */
 function avatar(cls = '') {
   const p = P();
-  return `<div class="avatar ${cls}" ${p.photoId ? `data-thumb="${p.photoId}"` : ''}>${p.photoId ? '' : '🐶'}</div>`;
+  return `<div class="avatar ${cls}" ${p.photoId ? `data-thumb="${p.photoId}"` : ''}>${p.photoId ? '' : isCat() ? '🐱' : '🐶'}</div>`;
 }
 
 function syncChip() {
@@ -435,18 +435,18 @@ VIEWS.today = () => {
   return `${header(sub)}
     <div class="cols"><div>
     ${homeCard()}
-    ${P().homeDay && daysUntil(P().homeDay) > 0 && !Store.list('log').length ? '' : countdownCard()}
+    ${isCat() || (P().homeDay && daysUntil(P().homeDay) > 0 && !Store.list('log').length) ? '' : countdownCard()}
     ${whoLine()}
-    ${walkCard()}
-    ${planTodayCard()}
-    ${coachTodayCard()}
+    ${isCat() ? '' : walkCard()}
+    ${isCat() ? '' : planTodayCard()}
+    ${isCat() ? '' : coachTodayCard()}
     ${quickGrid()}
-    ${askButton()}
+    ${isCat() ? '' : askButton()}
     ${appCfg('cam').on ? `<button class="cam-btn" data-act="openCam">📹 Check on ${esc(App.pet())} <span class="muted small">${esc(camName())}</span></button>` : ''}
     <section class="capture">
       <button data-act="capture" data-k="photo">📷 Photo</button>
       <button data-act="capture" data-k="video">🎥 Video</button>
-      ${needPortrait ? `<button data-act="portrait" class="hl">🐶 Week ${wk} portrait</button>` : `<button data-act="capture" data-k="pick">🖼️ Gallery</button>`}
+      ${needPortrait ? `<button data-act="portrait" class="hl">${isCat() ? '🐱' : '🐶'} Week ${wk} portrait</button>` : `<button data-act="capture" data-k="pick">🖼️ Gallery</button>`}
     </section>
     </div><div>
     <section class="card">
@@ -454,8 +454,8 @@ VIEWS.today = () => {
         <b>${isToday ? 'Today' : fmtDay(ui.day)}</b>
         <button data-act="day" data-d="1" ${isToday ? 'disabled' : ''} aria-label="Next day">›</button></div>
       <div class="stats">
-        <span>💧 ${sum.pee}</span><span>💩 ${sum.poop}</span><span class="${sum.accident ? 'bad' : ''}">⚠️ ${sum.accident}</span>
-        <span>🍖 ${sum.meal}${food?.mealsPerDay ? '/' + food.mealsPerDay : ''}</span><span>😴 ${sum.sleepH.toFixed(1)} h</span>
+        ${isCat() ? `<span>🪣 ${sum.litter}</span>` : `<span>💧 ${sum.pee}</span><span>💩 ${sum.poop}</span>`}<span class="${sum.accident ? 'bad' : ''}">⚠️ ${sum.accident}</span>
+        <span>${isCat() ? '🐟' : '🍖'} ${sum.meal}${food?.mealsPerDay ? '/' + food.mealsPerDay : ''}</span><span>😴 ${sum.sleepH.toFixed(1)} h</span>
       </div>
       <div class="timeline">${sum.logs.length ? sum.logs.map(timelineRow).join('') : '<p class="muted pad">Nothing logged yet.</p>'}</div>
     </section>
@@ -478,7 +478,7 @@ VIEWS.health = () => {
       ${due.length ? due.map(healthRow).join('') : '<p class="muted">Nothing scheduled.</p>'}
       ${!Store.list('health').length ? `<div class="empty">
         <p>Start from a typical first-year schedule (DHPP, lepto, bordetella, rabies, deworming, flea & tick) and edit it to match what your vet says.</p>
-        <button class="primary" data-act="typical" ${hasBday ? '' : 'disabled'}>Add typical puppy schedule</button>
+        <button class="primary" data-act="typical" ${hasBday ? '' : 'disabled'}>Add typical ${young()} schedule</button>
         ${hasBday ? '' : '<small>Add his birthday in More → Profile first.</small>'}</div>` : ''}
     </section>
     <section class="card"><div class="h-row"><h3>Weight</h3><button class="pill" data-act="addWeight">+ Weight</button></div>
@@ -631,11 +631,11 @@ VIEWS.train = () => {
   const weekGames = Store.list('enrich', r => T(r.at) > Date.now() - 7 * 864e5).length;
   return `${header('Training & brain games')}
     <div class="cols"><div>
-    ${coachCard()}
+    ${isCat() ? '' : coachCard()}
     <section class="card"><h3>✨ Today’s brain game</h3>
       <button class="item-main block" data-act="game" data-id="${pick.game.id}"><span class="ico">${pick.game.icon}</span><span><b>Play: ${esc(pick.game.title)}</b><small>${esc(pick.game.time)} · ${esc(pick.game.need)}</small></span></button>
     </section>
-    ${pottyPlanCard()}
+    ${isCat() ? '' : pottyPlanCard()}
     <section class="card"><h3>🆘 Behaviour help</h3>
       ${BEHAVIOUR.map(g => `<button class="item-main block" data-act="guide" data-id="${g.id}"><span class="ico">${g.icon}</span><span><b>${esc(g.title)}</b><small>${esc(g.when)}</small></span></button>`).join('')}
     </section>
@@ -644,9 +644,9 @@ VIEWS.train = () => {
       <details><summary>Training basics that make everything easier</summary><ul>${TRAINING_BASICS.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>
     </section>
     </div><div>
-    ${planCard()}
+    ${isCat() ? '' : planCard()}
     <section class="card"><div class="h-row"><h3>🧩 Brain games</h3><span class="muted small">${weekGames} this week</span></div>
-      <p class="muted small">10 minutes of sniffing and problem-solving can tire him like a long walk. Tip: serve one of his two meals this way.</p>
+      <p class="muted small">${isCat() ? 'Hunting and puzzle games use up energy and beat boredom. Tip: serve part of a meal this way.' : '10 minutes of sniffing and problem-solving can tire him like a long walk. Tip: serve one of his two meals this way.'}</p>
       <div class="games">${GAMES.map(g => { const n = doneGames(g.id).length; return `<button class="game" data-act="game" data-id="${g.id}"><span>${g.icon}</span><b>${esc(g.title)}</b><small>${esc(g.time)}${n ? ' · ✓' + n : ''}</small></button>`; }).join('')}</div>
     </section>
     <section class="card"><div class="h-row"><h3>🎓 Skills</h3><button class="pill" data-act="addSkill">+ Skill</button></div>
@@ -664,16 +664,20 @@ VIEWS.grow = () => {
     ${breedNotes() ? `<section class="card breed"><details><summary><b>🐕 About ${esc(P().breed)}s</b> <span class="muted small">tendencies, not rules</span></summary>
       <ul>${breedNotes().tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details></section>` : ''}
     ${trendsCard()}
-    ${pottyStats()}
+    ${isCat() ? '' : pottyStats()}
     </div><div>
     <section class="card"><h3>Socialization</h3>
-      <p class="muted">${wksLeft == null ? 'Add his birthday to see his window.' : wksLeft > 0
+      <p class="muted">${isCat() ? 'Kittens learn what’s normal mostly before 9 weeks, but calm, happy first meetings keep building confidence for months. A few minutes at a time, with treats.' : wksLeft == null ? 'Add his birthday to see his window.' : wksLeft > 0
         ? `The easy window for new experiences closes around 16 weeks — about <b>${wksLeft} week${wksLeft === 1 ? '' : 's'}</b> left. Aim for a few calm, happy meetings with each.`
         : 'His prime window has passed, but keep going — calm, positive exposures still build confidence.'}</p>
       ${Object.entries(SOCIAL).map(([cat, items]) => socialCat(cat, items)).join('')}
     </section>
     </div></div>`;
 };
+
+/* Dog or cat: the public copy asks at setup (cat.js swaps the lists); Oscar's copy is always a dog. */
+const isCat = () => EDITION.public && P().species === 'cat';
+const young = () => isCat() ? 'kitten' : 'puppy';
 
 /* Jindo-specific tips: always in Oscar's copy; in the public copy only for a Jindo. */
 const isJindo = () => !EDITION.public || /jindo/i.test(P().breed || '');
@@ -800,7 +804,7 @@ VIEWS.memories = () => {
       <button data-act="capture" data-k="photo">📷 Photo</button>
       <button data-act="capture" data-k="video">🎥 Video</button>
       <button data-act="capture" data-k="pick">🖼️ Gallery</button>
-      <button data-act="portrait">🐶 Portrait</button>
+      <button data-act="portrait">${isCat() ? '🐱' : '🐶'} Portrait</button>
       <button data-act="milestone">⭐ Milestone</button>
       <button data-act="journal">✍️ Journal</button>
     </section>
@@ -1150,7 +1154,8 @@ ACT.contact = d => {
 ACT.poison = async () => { for (const c of POISON_LINES) await Store.put({ kind: 'contact', ...c }); };
 
 /* Profile / you */
-ACT.profile = () => form({ title: '🐶 Profile', value: P(), fields: [
+ACT.profile = () => form({ title: `${isCat() ? '🐱' : '🐶'} Profile`, value: P(), fields: [
+  ...(EDITION.public ? [{ k: 'species', label: 'Dog or cat', type: 'chips', options: [['dog', '🐶 Dog'], ['cat', '🐱 Cat']], def: 'dog' }] : []),
   { type: 'row', fields: [{ k: 'name', label: 'Name', required: true, def: EDITION.public ? '' : 'Oscar' }, { k: 'breed', label: 'Breed' }] },
   { type: 'row', fields: [{ k: 'birthday', label: 'Birthday', type: 'date' }, { k: 'homeDay', label: 'Came home', type: 'date' }] },
   { type: 'row', fields: [{ k: 'sex', label: 'Sex', type: 'select', options: ['', 'Male', 'Male (neutered)', 'Female', 'Female (spayed)'] }, { k: 'colour', label: 'Colour / markings' }] },
@@ -1223,7 +1228,7 @@ async function onFiles(input) {
   toast(`Saved ${made.length > 1 ? made.length + ' items' : ''}${dups.length ? ` · ${dups.length} duplicate${dups.length > 1 ? 's' : ''} skipped` : ''} — ${Drive.configured() ? 'uploading to Drive' : 'will upload when synced'}`,
     made.length === 1 ? [{ label: 'Add caption', run: () => viewer(made[0].id) }] : []);
 }
-ACT.portrait = () => Media.portraitCamera(rec => toast(`🐶 Week ${App.weekOf(rec.at) ?? ''} portrait saved`, [{ label: 'View', run: () => viewer(rec.id) }]));
+ACT.portrait = () => Media.portraitCamera(rec => toast(`${isCat() ? '🐱' : '🐶'} Week ${App.weekOf(rec.at) ?? ''} portrait saved`, [{ label: 'View', run: () => viewer(rec.id) }]));
 ACT.memFilter = d => { ui.memFilter = d.k; render(); };
 ACT.view = d => viewer(d.id);
 
@@ -1362,7 +1367,7 @@ function inviteSheet(first) {
     <textarea readonly rows="4" class="mono">${esc(link)}</textarea>
     <div class="btns"><button class="ghost" id="inv-copy">Copy link</button><span class="grow"></span>${navigator.share ? '<button class="primary" id="inv-share">Share…</button>' : ''}</div>`, r => {
     $('#inv-copy', r).onclick = async () => { try { await navigator.clipboard.writeText(link); toast('Link copied'); } catch { r.querySelector('textarea').select(); } };
-    $('#inv-share', r) && ($('#inv-share', r).onclick = () => navigator.share({ title: `${App.pet()}’s puppy log`, text: 'Open this on your phone to join', url: link }).catch(() => {}));
+    $('#inv-share', r) && ($('#inv-share', r).onclick = () => navigator.share({ title: `${App.pet()}’s log`, text: 'Open this on your phone to join', url: link }).catch(() => {}));
   });
 }
 
@@ -1930,7 +1935,7 @@ ACT.notify = () => {
     $('#n-off', r) && ($('#n-off', r).onclick = async () => { await Push.disable(); ACT.notify(); });
     $('#n-test', r) && ($('#n-test', r).onclick = async () => {
       await Drive.sync();
-      const n = await Push.send(`🐶 Test from ${Store.who()}`, `Notifications for ${App.pet()} are working`, { includeSelf: true, tag: 'test' });
+      const n = await Push.send(`${isCat() ? '🐱' : '🐶'} Test from ${Store.who()}`, `Notifications for ${App.pet()} are working`, { includeSelf: true, tag: 'test' });
       toast(n ? `Sent to ${n} phone${n > 1 ? 's' : ''}` : 'Nothing sent — is sync connected?');
     });
   });
@@ -1985,7 +1990,8 @@ function onboard() {
   form({ title: 'Welcome 🐾', saveLabel: 'Let’s go',
     intro: '<p class="muted">A few basics. Everything can be changed later in More.</p>',
     fields: [
-      { k: 'name', label: 'Puppy’s name', required: true, def: EDITION.public ? '' : 'Oscar' }, { k: 'breed', label: 'Breed' },
+      ...(EDITION.public ? [{ k: 'species', label: 'Your pet is a', type: 'chips', options: [['dog', '🐶 Dog'], ['cat', '🐱 Cat']], def: 'dog' }] : []),
+      { k: 'name', label: EDITION.public ? 'Their name' : 'Puppy’s name', required: true, def: EDITION.public ? '' : 'Oscar' }, { k: 'breed', label: 'Breed' },
       { type: 'row', fields: [{ k: 'birthday', label: 'Birthday', type: 'date', hint: 'best guess is fine' }, { k: 'homeDay', label: 'Home day', type: 'date' }] },
       { k: 'me', label: 'Your name', required: true, hint: 'so you can tell who logged what' },
       { k: 'unit', label: 'Weight in', type: 'chips', options: ['kg', 'lb'], def: 'kg' }],
@@ -1996,9 +2002,23 @@ function onboard() {
     } });
 }
 
+/* The public copy takes the pet's name: tab title and the iPhone home-screen name
+   here; sw.js serves Android a manifest with the same name. */
+let namedAs = null;
+function nameApp() {
+  if (!EDITION.public || (P().name || '') === namedAs) return;
+  namedAs = P().name || '';
+  document.title = namedAs || EDITION.name;
+  let m = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+  if (!m) { m = document.createElement('meta'); m.name = 'apple-mobile-web-app-title'; document.head.appendChild(m); }
+  m.content = namedAs || EDITION.name;
+}
+
 /* ---------- render ---------- */
 let rq = false;
 function render() {
+  Species.apply(isCat() ? 'cat' : 'dog');
+  nameApp();
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === ui.tab));
   view().innerHTML = VIEWS[ui.tab]();
   Media.hydrate(view());
@@ -2024,9 +2044,10 @@ window.addEventListener('popstate', () => { if (!$('#sheet').hidden) closeSheet(
   /* Long-press app-icon shortcuts open ./#log=pee etc.: log it, then clear the hash so a reload doesn't log twice. */
   const fromShortcut = () => {
     const m = location.hash.match(/^#log=(\w+)$/);
-    if (!m || !LOG[m[1]]) return false;
+    const type = m && (m[1] === 'potty' ? (isCat() ? 'litter' : 'pee') : m[1]);     // the public copy's one "Potty / litter" shortcut
+    if (!type || !LOG[type]) return false;
     history.replaceState(null, '', location.pathname);
-    ui.tab = 'today'; render(); quickLog(m[1]);
+    ui.tab = 'today'; render(); quickLog(type);
     return true;
   };
   if (!fromShortcut()) goto(location.hash.slice(1));

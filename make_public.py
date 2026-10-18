@@ -19,14 +19,14 @@ import json, os, re, shutil, subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', 'puppy-log')
-NAME, KEY, URL = 'Puppy Log', 'puppylog', 'https://efem-code.github.io/puppy-log/'
+NAME, KEY, URL = 'Paw Log', 'puppylog', 'https://efem-code.github.io/puppy-log/'
 
-APP = ['index.html', 'styles.css', 'data.js', 'guides.js', 'store.js', 'drive.js', 'media.js', 'push.js', 'app.js', 'ask.js', 'coach.js', 'sw.js']
+APP = ['index.html', 'styles.css', 'data.js', 'guides.js', 'cat.js', 'store.js', 'drive.js', 'media.js', 'push.js', 'app.js', 'ask.js', 'coach.js', 'sw.js']
 
 # Oscar-only wording in shared text, swapped for wording that fits any dog. Each must be found.
 WORDING = {
-    'index.html': [("Oscar's potty timer, health records, training and growing-up album — shared between two phones through Google Drive.",
-                    'A puppy’s potty timer, health records, training and growing-up album — free, private, and shared between phones through your own Google Drive.')],
+    'index.html': [('<title>Puppy Log</title>', f'<title>{NAME}</title>'), ("Oscar's potty timer, health records, training and growing-up album — shared between two phones through Google Drive.",
+                    'Your dog’s or cat’s daily log, health records, training and growing-up album — free, private, and shared between phones through your own Google Drive.')],
     'push.js': [(f"sub: 'https://efem-code.github.io/oscar/'", f"sub: '{URL}'")],
     'media.js': [("that put Shae's clips on the wrong days", 'which put iPhone videos on the wrong days')],
     'drive.js': [('It saves into your Oscar folder as you', 'It saves into your folder as you')],
@@ -74,7 +74,7 @@ def main():
         if f == 'guides.js':
             a = s.index('/* The Oscar brand'); b = s.index('\n};\n', a) + 4
             s = s[:a] + "/* Brand kit: Oscar's copy only. */\nconst BRAND = { handle: '', bio: '', pillars: [], rhythm: [], look: [] };\n" + s[b:]
-        s = namespaced(s)
+        s = namespaced(s).replace('Puppy Log', NAME)
         if f == 'sw.js':
             s = s.replace("/* Puppy Log service worker", f"/* {NAME} service worker")
         open(os.path.join(OUT, f), 'w', encoding='utf-8').write(s)
@@ -85,8 +85,10 @@ def main():
 
     m = json.load(open(os.path.join(HERE, 'manifest.webmanifest')))
     m.update(name=NAME, short_name=NAME, id='./',
-             description='Potty timer, health records, training and a growing-up album for your puppy — free, private, shared between phones.')
-    m['shortcuts'] = [dict(s, name=s['name'].replace('Fed him', 'Fed the puppy')) for s in m['shortcuts']]
+             description='Daily log, health records, training and a growing-up album for your dog or cat — free, private, shared between phones.')
+    icon = [{'src': 'icon-192.png', 'sizes': '192x192'}]
+    m['shortcuts'] = [{'name': 'Log potty / litter', 'short_name': 'Potty', 'url': './#log=potty', 'icons': icon},
+                      {'name': 'Log a meal', 'short_name': 'Meal', 'url': './#log=meal', 'icons': icon}]
     json.dump(m, open(os.path.join(OUT, 'manifest.webmanifest'), 'w'), indent=2, ensure_ascii=False)
 
     shutil.copy(os.path.join(HERE, 'bridge', 'Code.gs'), os.path.join(OUT, 'bridge', 'Code.gs'))
@@ -101,8 +103,8 @@ def main():
     open(os.path.join(OUT, '.nojekyll'), 'w').close()
     open(os.path.join(OUT, 'README.md'), 'w').write(f"""# {NAME}
 
-A free, private puppy app: potty timer and house-training progress, meals, sleep, walks, health and vet records,
-training guides and brain games, and a growing-up photo album.
+A free, private app for your dog or cat: potty timer and house-training (dogs) or litter box log (cats), meals, sleep,
+health and vet records, training guides and games, and a growing-up photo album. It takes your pet's name on your home screen.
 
 **Open it:** {URL} → add it to your home screen (iPhone: Safari → Share → Add to Home Screen;
 Android: Chrome → ⋮ → Add to Home screen).
