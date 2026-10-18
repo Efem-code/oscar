@@ -28,7 +28,7 @@ def jpeg_from_video(src, out, size):
 
 def main(limit=None):
     recs, _ = bridge.records()
-    todo = [r for r in recs.values() if r.get('kind') == 'media' and not r.get('deleted') and r.get('driveId')
+    todo = [r for r in recs.values() if r.get('kind') == 'media' and not r.get('deleted') and r.get('driveId') and 'pdf' not in (r.get('mime') or '')
             and (not r.get('thumbId') or (not r.get('video') and not r.get('viewId') and 'hei' in (r.get('mime') or '')))]
     if limit:
         todo = todo[:limit]

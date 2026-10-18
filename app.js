@@ -434,6 +434,7 @@ VIEWS.today = () => {
   const needPortrait = wk != null && wk >= 0 && !Store.list('media', r => r.portrait && App.weekOf(r.at) === wk).length;
   return `${header(sub)}
     <div class="cols"><div>
+    ${installCard()}
     ${homeCard()}
     ${isCat() || (P().homeDay && daysUntil(P().homeDay) > 0 && !Store.list('log').length) ? '' : countdownCard()}
     ${whoLine()}
@@ -492,6 +493,7 @@ VIEWS.health = () => {
         <span class="ico">🩺</span><span><b>${esc(v.reason || 'Visit')}</b><small>${fmtDate(localDay(v.at))}${v.clinic ? ' · ' + esc(v.clinic) : ''}${v.cost ? ' · ' + money(v.cost) : ''}</small>
         ${v.comments ? `<small class="clip">“${esc(v.comments)}”</small>` : ''}</span></button>`).join('') : '<p class="muted">Log each visit with what the vet said — handy at the next one.</p>'}
     </section>
+    ${docsCard()}
     ${done.length ? `<section class="card"><h3>History</h3>${done.slice(0, 40).map(r => `<button class="item-main block" data-act="editHealth" data-id="${r.id}">
       <span class="ico">${HEALTH_CATS[r.cat]?.icon || '📌'}</span><span><b>${esc(r.name)}</b><small>done ${fmtDate(r.done)}${r.lot ? ' · lot ' + esc(r.lot) : ''}</small></span></button>`).join('')}</section>` : ''}
     </div></div>`;
@@ -983,6 +985,8 @@ VIEWS.more = () => {
       ${wishes().length ? '<button class="link" data-act="wishCopy">Copy list</button>' : ''}
     </section>
     <section class="card"><h3>Share & export</h3>
+      ${EDITION.public ? `<button class="item-main block" data-act="shareApp"><span class="ico">💌</span><span><b>Tell a friend about ${esc(EDITION.name)}</b><small>Send the link — free, no account, works for dogs and cats</small></span></button>
+      ${standaloneApp() ? '' : '<button class="item-main block" data-act="installAgain"><span class="ico">📲</span><span><b>Put it on your home screen</b><small>How to install it on this phone</small></span></button>'}` : ''}
       ${EDITION.public ? '' : `<button class="item-main block" data-act="brand"><span class="ico">📣</span><span><b>Oscar brand kit</b><small>${esc(BRAND.handle)} — content pillars, posting rhythm, bio</small></span></button>`}
       <button class="item-main block" data-act="book"><span class="ico">📖</span><span><b>${esc(App.pet())}’s photo book</b><small>Portraits, milestones and favourites as a printable book (PDF)</small></span></button>
       <button class="item-main block" data-act="prep"><span class="ico">🏠</span><span><b>Getting-ready checklist</b><small>${prepItems().done}/${prepItems().total} done</small></span></button>
@@ -1078,6 +1082,74 @@ function saveVet(id) {
     if (!id) setTimeout(() => ACT.showVet({ id: r.id }), 50);
   };
 }
+/* ---------- getting it onto the home screen ---------- */
+/* Most people open the public copy from a link in a text or a social app. Work
+   out where they are and show the one instruction that works there. */
+let installEvt = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; renderSoon(); });
+addEventListener('appinstalled', () => { installEvt = null; renderSoon(); });
+const standaloneApp = () => navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+const appLink = () => location.origin + location.pathname;
+function installCard() {
+  if (!EDITION.public || standaloneApp() || Store.pref('oscar.noInstall') === '1') return '';
+  const ua = navigator.userAgent, android = /Android/.test(ua), ios = !android && isIPhone();
+  const inApp = /FBAN|FBAV|FB_IAB|Instagram|Messenger|Line\/|Snapchat|musical_ly|TikTok|Twitter|LinkedInApp|; wv\)/.test(ua);
+  const name = esc(document.title || EDITION.name);
+  const copy = `<button class="ghost" data-act="copyAppLink">Copy link</button>`;
+  let body;
+  if (!ios && !android) body = `<p>Open this on your phone to install it — send yourself the link:</p><p class="mono small">${esc(appLink())}</p><div class="btns">${copy}</div>`;
+  else if (inApp) body = `<p>You’re in another app’s built-in browser, which can’t install apps. Tap <b>⋯</b> or <b>⋮</b> (top or bottom corner) → <b>Open in ${ios ? 'Safari' : 'Chrome'}</b>${ios ? ' (or “Open in browser”)' : ''}.</p><p class="small muted">No button? Copy the link and paste it into ${ios ? 'Safari' : 'Chrome'}.</p><div class="btns">${copy}</div>`;
+  else if (installEvt) body = `<p>Put ${name} on your home screen — it opens like a normal app, works offline and can send reminders.</p><div class="btns"><button class="primary" data-act="installNow">📲 Install</button></div>`;
+  else if (ios) body = `<ol class="install-steps"><li>Tap <b>Share</b> (the square with an arrow pointing up) — at the bottom in Safari${/CriOS|FxiOS|EdgiOS/.test(ua) ? ', or top right in Chrome' : ''}.</li><li>Scroll down, tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>, then open ${name} from the new icon.</li></ol><p class="small muted">Reminders and notifications on iPhone only work from the home-screen icon.</p>`;
+  else body = `<p>Tap the browser menu <b>⋮</b> → <b>Install app</b> or <b>Add to Home screen</b>.</p><p class="small muted">Not there? Open this page in Chrome.</p>`;
+  return `<section class="card install"><div class="h-row"><h3>📲 Install ${name}</h3><button class="link" data-act="installLater">Not now</button></div>${body}</section>`;
+}
+ACT.installNow = async () => { if (!installEvt) return; installEvt.prompt(); const r = await installEvt.userChoice.catch(() => null); installEvt = null; if (r?.outcome === 'accepted') toast('Installed — open it from your home screen'); render(); };
+ACT.installLater = () => { Store.setPref('oscar.noInstall', '1'); render(); toast('You can install it later from More'); };
+ACT.installAgain = () => { Store.setPref('oscar.noInstall', ''); ui.tab = 'today'; render(); scrollTo(0, 0); };
+ACT.copyAppLink = async () => { try { await navigator.clipboard.writeText(appLink()); toast('Link copied'); } catch { toast(esc(appLink())); } };
+ACT.shareApp = async () => {
+  const text = `${EDITION.name}: a free app to log your dog’s or cat’s potty, meals, sleep, vet records and photos — no account, private to you.`;
+  if (navigator.share) { try { await navigator.share({ title: EDITION.name, text, url: appLink() }); } catch {} }
+  else ACT.copyAppLink();
+};
+
+/* ---------- documents ---------- */
+/* Every paper in one place: ones added here (adoption papers, insurance policy,
+   microchip, records from before he came home) and ones attached to vet visits.
+   Files land in Drive → Vet & Documents. */
+const DOC_TYPES = [['vaccine', '💉 Vaccine record'], ['vet', '🩺 Vet record'], ['insurance', '🛡️ Insurance'], ['adoption', '🏡 Adoption / rescue'],
+  ['microchip', '🔖 Microchip'], ['licence', '🪪 Licence'], ['receipt', '🧾 Receipt'], ['other', '📄 Other']];
+const docLabel = k => (DOC_TYPES.find(t => t[0] === k) || DOC_TYPES[DOC_TYPES.length - 1])[1];
+const visitOf = id => Store.list('vet', v => (v.docs || []).includes(id))[0];
+function docsCard() {
+  const docs = Store.list('media', r => r.doc).sort((a, b) => a.at < b.at ? 1 : -1);
+  const all = ui.openCats.docs, shown = all ? docs : docs.slice(0, 5);
+  return `<section class="card"><div class="h-row"><h3>📁 Documents</h3><button class="pill" data-act="addDoc">＋ Add</button></div>
+    ${docs.length ? shown.map(d => { const v = visitOf(d.id), pdf = /pdf/i.test(d.mime || '');
+      return `<button class="item-main block doc-row" data-act="view" data-id="${d.id}">
+        <div class="th doc-th" ${pdf ? '' : `data-thumb="${d.id}"`}>${pdf ? '📄' : ''}</div>
+        <span><b>${esc(d.caption || docLabel(d.docType || (v ? 'vet' : 'other')).replace(/^\S+ /, ''))}</b>
+        <small>${esc(docLabel(d.docType || (v ? 'vet' : 'other')))} · ${fmtDate(localDay(d.at))}${v ? ' · ' + esc(v.reason || 'vet visit') : ''}${d.driveId ? '' : ' · ⏳ uploading'}</small></span></button>`; }).join('')
+      + (docs.length > 5 ? `<button class="link" data-act="docsAll">${all ? 'Show fewer' : `Show all ${docs.length}`}</button>` : '')
+      : '<p class="muted">Adoption papers, vaccine certificates, insurance, microchip — photograph them or add the PDF, and they’re on both phones and in Drive.</p>'}
+  </section>`;
+}
+ACT.docsAll = () => { ui.openCats.docs = !ui.openCats.docs; render(); };
+ACT.addDoc = () => form({ title: '📁 Add a document', saveLabel: 'Save',
+  fields: [
+    { k: 'docType', label: 'What is it', type: 'chips', options: DOC_TYPES, def: 'vaccine' },
+    { k: 'title', label: 'Title', ph: 'e.g. Rabies certificate, Pet insurance policy', required: true },
+    { k: 'day', label: 'Date on the document', type: 'date', def: todayKey() },
+    { k: 'file', label: 'Photo or PDF', type: 'file', accept: 'image/*,application/pdf' }],
+  onSave: async v => {
+    if (!v.file) throw new Error('Take a photo or choose the file first');
+    const r = await Media.add(v.file, { doc: true, caption: v.title, at: new Date(`${v.day || todayKey()}T12:00:00`).toISOString() });
+    await Store.put({ id: r.id, docType: v.docType || 'other' });
+    toast(`Saved — ${Drive.configured() ? 'uploading to Drive' : 'will upload when synced'}`);
+    Drive.sync();
+  } });
+
 ACT.addVet = () => {
   const clinic = Store.list('contact', c => c.role === 'Vet clinic')[0];
   form({ title: '🩺 Vet visit', fields: vetFields, value: { day: todayKey(), unit: P().unit || 'kg', clinic: clinic?.name || '' }, onSave: saveVet() });
@@ -1280,6 +1352,14 @@ async function viewer(id) {
     stage.innerHTML = `<div class="v-play"><a class="primary" href="${Drive.webLink(rec.driveId)}" target="_blank" rel="noopener">▶ Play in Google Drive</a>
       <button class="link" data-v="here">or load it here (slower)</button></div>`;
     stage.querySelector('[data-v=here]').onclick = e => { e.stopPropagation(); loadFull(); };
+  } else if (/pdf/i.test(rec.mime || '')) {
+    stage.innerHTML = `<div class="v-play"><span class="doc-big">📄</span>${rec.driveId ? `<a class="primary" href="${Drive.webLink(rec.driveId)}" target="_blank" rel="noopener">Open the PDF in Google Drive</a>` : ''}
+      <button class="link" data-v="pdfhere">${rec.driveId ? 'or open it from this phone' : 'Open the PDF'}</button></div>`;
+    stage.querySelector('[data-v=pdfhere]').onclick = async e => {
+      e.stopPropagation();
+      const u = await Media.fullURL(rec).catch(() => null);
+      u ? window.open(u, '_blank') : toast('Still uploading from the other phone — try again in a minute');
+    };
   } else loadFull();
   function loadFull() {
   stage.innerHTML = '<div class="spin">Loading…</div>';
