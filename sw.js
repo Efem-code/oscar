@@ -3,7 +3,7 @@
    browser sees an identical service worker, keeps the old one, and the update
    never reaches the phone. */
 importScripts('./edition.js');   // EDITION: Oscar's copy or the public one
-const BUILD = '20261017-224312';
+const BUILD = '20261018-161801';
 const PREFIX = 'oscar-';
 const CACHE = PREFIX + BUILD;
 const SHELL = [
